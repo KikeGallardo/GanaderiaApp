@@ -1,0 +1,51 @@
+package com.ganaderia.ganaderiaapp.data.model
+
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
+data class Animal(
+    val id: Int = 0,
+    val identificacion: String,
+    val raza: String,
+    val sexo: String,
+    val categoria: String,
+    val fecha_nacimiento: String,
+    val fecha_ingreso: String,
+    val peso_actual: String?,
+    val estado_salud: String,
+    val notas: String?,
+    val madre_identificacion: String?,
+    val madre_raza: String?,
+    val padre_identificacion: String?,
+    val padre_raza: String?,
+    val edad_meses: Int?
+) : Parcelable
+
+@Parcelize
+data class AnimalSimple(
+    val id: Int,
+    val identificacion: String,
+    val raza: String
+) : Parcelable
+
+data class AnimalRequest(
+    val identificacion: String,
+    val raza: String,
+    val sexo: String,
+    val categoria: String,
+    val fecha_nacimiento: String,
+    val fecha_ingreso: String,
+    val peso_actual: Double?,
+    val estado_salud: String,
+    val madre_id: Int?,
+    val padre_id: Int?,
+    val notas: String?
+)
+data class KPIs(
+    val total_animales: Int,
+    val peso_promedio: String,
+    val total_hembras: String,
+    val total_machos: String,
+    val en_tratamiento: String
+)
