@@ -27,13 +27,6 @@ data class Animal(
     val padre_id: Int?
 ) : Parcelable
 
-@Parcelize
-data class AnimalSimple(
-    val id: Int,
-    val identificacion: String,
-    val raza: String
-) : Parcelable
-
 data class AnimalRequest(
     val identificacion: String,
     val raza: String,
@@ -43,7 +36,14 @@ data class AnimalRequest(
     val fecha_ingreso: String,
     val peso_actual: Double?,
     val estado_salud: String,
-    val madre_id: Int?,
-    val padre_id: Int?,
+    // CAMBIADO A STRING PARA GUARDAR NOMBRES DIRECTAMENTE
+    val madre_identificacion: String?,
+    val padre_identificacion: String?,
     val notas: String?
 )
+@Parcelize
+data class AnimalSimple(
+    val id: Int,
+    val identificacion: String,
+    val raza: String
+) : Parcelable

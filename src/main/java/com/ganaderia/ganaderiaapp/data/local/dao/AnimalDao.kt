@@ -20,6 +20,9 @@ interface AnimalDao {
     @Query("SELECT * FROM animales WHERE (sincronizado = 0 OR sincronizado = 'false') AND activo = 1")
     suspend fun getNoSincronizados(): List<AnimalEntity>
 
+    @Query("UPDATE animales SET madre_identificacion = :madre, padre_identificacion = :padre WHERE localId = :localId")
+    suspend fun actualizarNombresPadres(localId: Int, madre: String?, padre: String?)
+
     @Query("SELECT * FROM animales WHERE id = :id")
     suspend fun getAnimalById(id: Int): AnimalEntity?
 

@@ -225,6 +225,23 @@ class GanadoRepository(
         }
     }
 
+    suspend fun refrescarNombresPadres(localId: Int, serverId: Int) = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getAnimalById(serverId)
+            if (response.success) {
+                val animalRed = response.data
+                // Solo guardamos los textos de identificación obtenidos del JOIN del servidor
+                animalDao.actualizarNombresPadres(
+                    localId,
+                    animalRed.madre_identificacion,
+                    animalRed.padre_identificacion
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error refrescando nombres: ${e.message}")
+        }
+    }
+
     suspend fun getAnimalByLocalId(localId: Int): Result<Animal> = withContext(Dispatchers.IO) {
         Log.d("GanadoRepository", "=== GET ANIMAL BY LOCAL ID ===")
         Log.d("GanadoRepository", "LocalId solicitado: $localId")

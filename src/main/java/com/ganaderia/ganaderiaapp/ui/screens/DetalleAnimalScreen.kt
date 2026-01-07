@@ -22,6 +22,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.ganaderia.ganaderiaapp.data.model.VacunaRequest
+import com.ganaderia.ganaderiaapp.data.model.formatearFechaAmigable
 import com.ganaderia.ganaderiaapp.ui.viewmodel.DetalleAnimalViewModel
 import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import com.ganaderia.ganaderiaapp.ui.components.*
@@ -198,8 +199,8 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
 
         item {
             DetalleCard(titulo = "Genealogía") {
-                InfoRow(Icons.Default.Male, "Padre", animal.padre_identificacion ?: "Sin registro")
-                InfoRow(Icons.Default.Female, "Madre", animal.madre_identificacion ?: "Sin registro")
+                InfoRow(Icons.Default.Female, "Madre", animal.madre_identificacion ?: "Sin registrar")
+                InfoRow(Icons.Default.Male, "Padre", animal.padre_identificacion ?: "Sin registrar")
             }
         }
 
@@ -215,8 +216,11 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
                     "Peso Actual",
                     pesoFormateado
                 )
-                InfoRow(Icons.Default.DateRange, "Nacimiento", animal.fecha_nacimiento)
-                InfoRow(Icons.Default.DateRange, "Ingreso", animal.fecha_ingreso)
+                InfoRow(
+                    icon = Icons.Default.Cake,
+                    label = "Fecha de Nacimiento",
+                    value = formatearFechaAmigable(animal.fecha_nacimiento)
+                )
             }
         }
 

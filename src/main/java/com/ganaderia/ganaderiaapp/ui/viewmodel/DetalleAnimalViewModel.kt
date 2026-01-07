@@ -32,39 +32,20 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
     fun cargarAnimal(localId: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-            _error.value = null
+            repository.getAnimalByLocalId(localId).onSuccess { animal ->
+                _animal.value = animal
+                Log.d("DEBUG_PADRES", "Local - Madre: ${animal.madre_identificacion}, Padre: ${animal.padre_identificacion}")
 
-            Log.d("DetalleViewModel", "=== CARGANDO ANIMAL ===")
-            Log.d("DetalleViewModel", "LocalId: $localId")
-
-            // 🔧 CRÍTICO: Obtener animal SIEMPRE desde BD local
-            // NO intentar refrescar desde servidor aquí
-            repository.getAnimalByLocalId(localId)
-                .onSuccess { animal ->
-                    _animal.value = animal
-                    Log.d("DetalleViewModel", "✅ Animal cargado desde BD local:")
-                    Log.d("DetalleViewModel", "  - Identificación: ${animal.identificacion}")
-                    Log.d("DetalleViewModel", "  - LocalId: ${animal.localId}")
-                    Log.d("DetalleViewModel", "  - ServerId: ${animal.id}")
-                    Log.d("DetalleViewModel", "  - Sincronizado: ${animal.sincronizado}")
-                    Log.d("DetalleViewModel", "  - Peso: ${animal.peso_actual}")
-
-                    // Solo cargar vacunas si tiene ID del servidor
-                    if (animal.id > 0) {
-                        cargarVacunas(animal.id)
-                    } else {
-                        Log.d("DetalleViewModel", "⚠️ Animal sin ID servidor, vacunas no disponibles aún")
-                    }
-
-                    cargarCatalogo()
-                }
-                .onFailure { e ->
-                    if (_animal.value == null) {
-                        _error.value = "Error al cargar animal: ${e.message}"
-                        Log.e("DetalleViewModel", "❌ Error cargando animal", e)
+                if (animal.id > 0 && animal.sincronizado) {
+                    viewModelScope.launch {
+                        repository.refrescarNombresPadres(animal.localId, animal.id)
+                        repository.getAnimalByLocalId(localId).onSuccess { actualizado ->
+                            _animal.value = actualizado
+                            Log.d("DEBUG_PADRES", "Post-Refresco - Madre: ${actualizado.madre_identificacion}")
+                        }
                     }
                 }
-
+            }
             _isLoading.value = false
         }
     }

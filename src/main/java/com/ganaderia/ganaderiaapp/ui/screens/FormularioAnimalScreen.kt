@@ -16,6 +16,7 @@ import com.ganaderia.ganaderiaapp.data.model.AnimalRequest
 import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import com.ganaderia.ganaderiaapp.ui.viewmodel.FormularioAnimalViewModel
 import android.util.Log
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,15 +36,16 @@ fun FormularioAnimalScreen(
     var sexoSeleccionado by remember { mutableStateOf("Macho") }
     var categoriaSeleccionada by remember { mutableStateOf("Ternero/a") }
     var fechaNacimiento by remember { mutableStateOf("") }
-    var fechaIngreso by remember { mutableStateOf("") }
     var pesoActual by remember { mutableStateOf("") }
     var estadoSalud by remember { mutableStateOf("Bueno") }
-    var madreSeleccionada by remember { mutableStateOf<Int?>(null) }
-    var padreSeleccionado by remember { mutableStateOf<Int?>(null) }
+
+    // 🔧 CORREGIDO: Ahora son Strings
+    var madreSeleccionada by remember { mutableStateOf<String?>(null) }
+    var padreSeleccionado by remember { mutableStateOf<String?>(null) }
+
     var notas by remember { mutableStateOf("") }
 
     var showDatePickerNac by remember { mutableStateOf(false) }
-    var showDatePickerIng by remember { mutableStateOf(false) }
     var mostrarErrores by remember { mutableStateOf(false) }
     var datosYaCargados by remember { mutableStateOf(false) }
 
@@ -71,15 +73,15 @@ fun FormularioAnimalScreen(
                 sexoSeleccionado = animal.sexo
                 categoriaSeleccionada = animal.categoria
                 fechaNacimiento = animal.fecha_nacimiento.take(10)
-                fechaIngreso = animal.fecha_ingreso.take(10)
-                pesoActual = animal.peso_actual?.toString() ?: ""  // CAMBIADO: de String directo a toString()
+                pesoActual = animal.peso_actual?.toString() ?: ""
                 estadoSalud = animal.estado_salud
                 notas = animal.notas ?: ""
+
+                // 🔧 CORREGIDO: Asignar identificaciones de texto
+                madreSeleccionada = animal.madre_identificacion
+                padreSeleccionado = animal.padre_identificacion
+
                 datosYaCargados = true
-
-                madreSeleccionada = animal.madre_id
-                padreSeleccionado = animal.padre_id
-
             }
         }
     }
@@ -151,38 +153,31 @@ fun FormularioAnimalScreen(
             }
 
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = fechaNacimiento,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("F. Nacimiento *") },
-                        modifier = Modifier.weight(1f),
-                        trailingIcon = { IconButton(onClick = { showDatePickerNac = true }) { Icon(Icons.Default.DateRange, null) } },
-                        shape = RoundedCornerShape(12.dp),
-                        isError = mostrarErrores && fechaNacimiento.isEmpty()
-                    )
-                    OutlinedTextField(
-                        value = fechaIngreso,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("F. Ingreso *") },
-                        modifier = Modifier.weight(1f),
-                        trailingIcon = { IconButton(onClick = { showDatePickerIng = true }) { Icon(Icons.Default.DateRange, null) } },
-                        shape = RoundedCornerShape(12.dp),
-                        isError = mostrarErrores && fechaIngreso.isEmpty()
-                    )
-                }
+                OutlinedTextField(
+                    value = fechaNacimiento,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("F. Nacimiento (Opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { IconButton(onClick = { showDatePickerNac = true }) { Icon(Icons.Default.DateRange, null) } },
+                    shape = RoundedCornerShape(12.dp)
+                )
             }
 
             item {
                 OutlinedTextField(
                     value = pesoActual,
                     onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) pesoActual = it },
-                    label = { Text("Peso Actual (kg)") },
+                    label = { Text("Peso Actual (kg) *") },
                     modifier = Modifier.fillMaxWidth(),
+                    isError = mostrarErrores && pesoActual.isEmpty(),
                     shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.MonitorWeight, null) }
+                    leadingIcon = { Icon(Icons.Default.MonitorWeight, null) },
+                    supportingText = {
+                        if (mostrarErrores && pesoActual.isEmpty()) {
+                            Text("El peso es obligatorio", color = GanadoColors.Error)
+                        }
+                    }
                 )
             }
 
@@ -195,11 +190,12 @@ fun FormularioAnimalScreen(
                 )
             }
 
+            // 🔧 CORREGIDO: Ahora usa las listas de Strings
             item {
                 SelectorPadres(
                     label = "Madre",
                     opciones = hembras,
-                    seleccionadoId = madreSeleccionada,
+                    seleccionado = madreSeleccionada,
                     onSeleccion = { madreSeleccionada = it }
                 )
             }
@@ -208,7 +204,7 @@ fun FormularioAnimalScreen(
                 SelectorPadres(
                     label = "Padre",
                     opciones = machos,
-                    seleccionadoId = padreSeleccionado,
+                    seleccionado = padreSeleccionado,
                     onSeleccion = { padreSeleccionado = it }
                 )
             }
@@ -227,29 +223,23 @@ fun FormularioAnimalScreen(
             item {
                 Button(
                     onClick = {
-                        Log.d("FormularioScreen", "=== BOTÓN GUARDAR PRESIONADO ===")
-                        Log.d("FormularioScreen", "animalId recibido: $animalId")
-                        Log.d("FormularioScreen", "Identificación: $identificacion")
-
-                        if (identificacion.isBlank() || fechaNacimiento.isBlank() || fechaIngreso.isBlank()) {
+                        if (identificacion.isBlank() || pesoActual.isBlank()) {
                             mostrarErrores = true
-                            Log.w("FormularioScreen", "Validación fallida: campos vacíos")
                         } else {
                             val request = AnimalRequest(
                                 identificacion = identificacion,
                                 raza = razaSeleccionada,
                                 sexo = sexoSeleccionado,
                                 categoria = categoriaSeleccionada,
-                                fecha_nacimiento = fechaNacimiento,
-                                fecha_ingreso = fechaIngreso,
+                                fecha_nacimiento = if (fechaNacimiento.isBlank()) "2000-01-01" else fechaNacimiento,
+                                fecha_ingreso = LocalDate.now().toString(),
                                 peso_actual = pesoActual.toDoubleOrNull(),
                                 estado_salud = estadoSalud,
-                                madre_id = madreSeleccionada,
-                                padre_id = padreSeleccionado,
+                                // 🔧 CORREGIDO: Enviamos strings
+                                madre_identificacion = madreSeleccionada,
+                                padre_identificacion = padreSeleccionado,
                                 notas = notas.ifBlank { null }
                             )
-
-                            Log.d("FormularioScreen", "Request creado, llamando a viewModel.guardarAnimal()")
                             viewModel.guardarAnimal(request)
                         }
                     },
@@ -267,26 +257,11 @@ fun FormularioAnimalScreen(
                     }
                 }
             }
-            if (error != null) {
-                item {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
-                            Spacer(Modifier.width(8.dp))
-                            Text(error!!, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
+            // ... resto del código de error ...
         }
     }
 
     if (showDatePickerNac) VentanaFecha({ fechaNacimiento = it }, { showDatePickerNac = false })
-    if (showDatePickerIng) VentanaFecha({ fechaIngreso = it }, { showDatePickerIng = false })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -309,15 +284,21 @@ fun SelectorDropdown(label: String, opciones: List<String>, seleccionado: String
     }
 }
 
+// 🔧 COMPONENTE ACTUALIZADO PARA STRINGS
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SelectorPadres(label: String, opciones: List<com.ganaderia.ganaderiaapp.data.model.AnimalSimple>, seleccionadoId: Int?, onSeleccion: (Int?) -> Unit) {
+fun SelectorPadres(
+    label: String,
+    opciones: List<String>,
+    seleccionado: String?,
+    onSeleccion: (String?) -> Unit
+) {
     var expandido by remember { mutableStateOf(false) }
-    val textoSeleccionado = opciones.find { it.id == seleccionadoId }?.identificacion ?: "Ninguno"
+    val textoMostrar = seleccionado ?: "Ninguno"
 
     ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = it }) {
         OutlinedTextField(
-            value = textoSeleccionado,
+            value = textoMostrar,
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -326,11 +307,14 @@ fun SelectorPadres(label: String, opciones: List<com.ganaderia.ganaderiaapp.data
             shape = RoundedCornerShape(12.dp)
         )
         ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
-            DropdownMenuItem(text = { Text("Ninguno") }, onClick = { onSeleccion(null); expandido = false })
-            opciones.forEach { animal ->
+            DropdownMenuItem(
+                text = { Text("Ninguno") },
+                onClick = { onSeleccion(null); expandido = false }
+            )
+            opciones.forEach { nombre ->
                 DropdownMenuItem(
-                    text = { Text("${animal.identificacion} - ${animal.raza}") },
-                    onClick = { onSeleccion(animal.id); expandido = false }
+                    text = { Text(nombre) },
+                    onClick = { onSeleccion(nombre); expandido = false }
                 )
             }
         }

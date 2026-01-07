@@ -41,6 +41,20 @@ fun InventarioScreen(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val error by viewModel.error.collectAsState()
 
+    // Estado para la barra de búsqueda
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Filtrado de la lista en tiempo real
+    val animalesFiltrados = remember(searchQuery, animales) {
+        if (searchQuery.isEmpty()) {
+            animales
+        } else {
+            animales.filter {
+                it.identificacion.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     val animalesNoSincronizados = animales.count { !it.sincronizado }
 
     Scaffold(
@@ -70,7 +84,6 @@ fun InventarioScreen(
                     }
                 },
                 actions = {
-                    // 🔧 NUEVO: Indicador visual de sincronización
                     if (isSyncing) {
                         CircularProgressIndicator(
                             modifier = Modifier
@@ -80,8 +93,6 @@ fun InventarioScreen(
                             strokeWidth = 2.dp
                         )
                     }
-
-                    // Botón de refresh manual (opcional)
                     IconButton(onClick = { viewModel.refrescar() }) {
                         Icon(Icons.Default.Refresh, "Actualizar", tint = Color.White)
                     }
@@ -106,10 +117,34 @@ fun InventarioScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // 🔧 NUEVO: Indicador sutil de sincronización
+
+            // BARRA DE BÚSQUEDA
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                placeholder = { Text("Buscar por identificación...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = GanadoColors.Primary,
+                    unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
+                )
+            )
+
             if (isSyncing || animalesNoSincronizados > 0) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                     color = if (isSyncing) GanadoColors.Info.copy(alpha = 0.1f) else Color(0xFFFF9800).copy(alpha = 0.1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -124,42 +159,13 @@ fun InventarioScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Icon(
-                                Icons.Default.CloudQueue,
-                                contentDescription = null,
-                                tint = Color(0xFFFF9800),
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Icon(Icons.Default.CloudQueue, null, tint = Color(0xFFFF9800), modifier = Modifier.size(16.dp))
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = if (isSyncing)
-                                "Sincronizando automáticamente..."
-                            else
-                                "$animalesNoSincronizados cambios se sincronizarán automáticamente",
+                            text = if (isSyncing) "Sincronizando..." else "$animalesNoSincronizados cambios pendientes",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isSyncing) GanadoColors.Info else Color(0xFFFF9800)
-                        )
-                    }
-                }
-            }
-
-            if (error != null && animales.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.error)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Sin conexión - Datos guardados localmente",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }
@@ -170,11 +176,11 @@ fun InventarioScreen(
                     ErrorScreen(error!!) { viewModel.refrescar() }
                 }
 
-                animales.isEmpty() && !isLoading -> {
+                animalesFiltrados.isEmpty() && !isLoading -> {
                     EmptyState(
-                        icono = "🐄",
-                        titulo = "No hay animales registrados",
-                        mensaje = "Presiona el botón + para agregar tu primer animal"
+                        icono = if (searchQuery.isEmpty()) "🐄" else "🔍",
+                        titulo = if (searchQuery.isEmpty()) "No hay animales" else "Sin resultados",
+                        mensaje = if (searchQuery.isEmpty()) "Presiona + para agregar" else "No se encontró: $searchQuery"
                     )
                 }
 
@@ -183,16 +189,13 @@ fun InventarioScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(animales) { animal ->
+                        items(animalesFiltrados) { animal ->
                             AnimalCard(
                                 animal = animal,
                                 onClick = { onNavigateToDetalle(animal.localId) }
                             )
                         }
-
-                        item {
-                            Spacer(modifier = Modifier.height(80.dp))
-                        }
+                        item { Spacer(modifier = Modifier.height(80.dp)) }
                     }
                 }
             }
