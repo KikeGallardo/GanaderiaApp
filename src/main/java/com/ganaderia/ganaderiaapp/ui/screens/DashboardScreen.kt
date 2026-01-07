@@ -1,3 +1,6 @@
+// ============================================
+// DashboardScreen.kt - Sin botón de sync visible
+// ============================================
 package com.ganaderia.ganaderiaapp.ui.screens
 
 import androidx.compose.foundation.layout.*
@@ -36,25 +39,32 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dashboard Ganadero", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Dashboard Ganadero", fontWeight = FontWeight.Bold)
+                        if (isSyncing) {
+                            Text(
+                                "Sincronizando...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = GanadoColors.Primary,
                     titleContentColor = Color.White
                 ),
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.forzarSincronizacion() },
-                        enabled = !isSyncing
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(Icons.Default.Sync, "Sincronizar", tint = Color.White)
-                        }
+                    // 🔧 NUEVO: Indicador de auto-sync (sin botón)
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .padding(end = 8.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
                     }
                 }
             )
@@ -90,13 +100,31 @@ fun DashboardScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // 🔧 NUEVO: Indicador sutil de sincronización
                         if (isSyncing) {
                             item {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth().height(4.dp),
-                                    color = GanadoColors.Primary,
-                                    trackColor = GanadoColors.Primary.copy(alpha = 0.2f)
-                                )
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = GanadoColors.Info.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = GanadoColors.Info,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            "Sincronizando datos automáticamente...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = GanadoColors.Info
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -188,11 +216,12 @@ fun DashboardScreen(
                     EmptyState(
                         icono = "📊",
                         titulo = "Sin datos disponibles",
-                        mensaje = "Sincroniza para cargar el dashboard"
+                        mensaje = "Los datos se sincronizarán automáticamente"
                     )
                 }
             }
 
+            // 🔧 MEJORADO: Error sutil que no bloquea la UI
             if (error != null && kpis != null) {
                 Surface(
                     modifier = Modifier
@@ -208,13 +237,13 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.Warning,
+                            Icons.Default.CloudOff,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = error ?: "Error de conexión",
+                            text = "Sin conexión - Datos guardados localmente",
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)

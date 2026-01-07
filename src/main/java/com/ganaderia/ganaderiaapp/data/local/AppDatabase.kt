@@ -13,10 +13,9 @@ import com.ganaderia.ganaderiaapp.data.local.entities.KPIsEntity
 
 
 @Database(
-    // 1. AGREGA KPIsEntity a la lista
     entities = [AnimalEntity::class, VacunaEntity::class, KPIsEntity::class],
-    // 2. SUBE LA VERSIÓN a 2
-    version = 2
+    version = 3,  // 🔧 INCREMENTADA: Forzar recreación de BD
+    exportSchema = false
 )
 abstract class GanadoDatabase : RoomDatabase() {
 
@@ -33,9 +32,9 @@ abstract class GanadoDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     GanadoDatabase::class.java,
-                    "ganaderia_db"
+                    "ganado_db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration()  // Recrear BD si hay cambios
                     .build()
 
                 INSTANCE = instance

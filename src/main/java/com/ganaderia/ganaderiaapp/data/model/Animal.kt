@@ -1,5 +1,4 @@
 package com.ganaderia.ganaderiaapp.data.model
-import com.google.gson.annotations.SerializedName
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
@@ -23,7 +22,7 @@ data class Animal(
     val padre_raza: String?,
     val edad_meses: Int,
     val activo: Int = 1,
-    val sincronizado: Boolean,
+    val sincronizado: Boolean = true,
     val madre_id: Int?,
     val padre_id: Int?
 ) : Parcelable

@@ -19,13 +19,13 @@ fun Animal.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntity {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toDoubleOrNull(), // String? -> Double?
+        peso_actual = this.peso_actual?.toDoubleOrNull(),
         estado_salud = this.estado_salud,
         notas = this.notas,
         edad_meses = this.edad_meses,
-        madre_id = null, // Ajustar según lógica de negocio si es necesario
+        madre_id = null,
         padre_id = null,
-        sincronizado = sincronizado,
+        sincronizado = if (sincronizado) true else false,  // 🔧 Boolean -> Int
         activo = 1
     )
 }
@@ -41,16 +41,16 @@ fun AnimalEntity.toModel(): Animal {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toString(), // Double? -> String?
+        peso_actual = this.peso_actual?.toString(),
         estado_salud = this.estado_salud,
         notas = this.notas,
-        madre_identificacion = null, // Estos campos no existen en AnimalEntity actualmente
+        madre_identificacion = null,
         madre_raza = null,
         padre_identificacion = null,
         padre_raza = null,
         edad_meses = this.edad_meses,
         activo = this.activo,
-        sincronizado = this.sincronizado,
+        sincronizado = this.sincronizado,  // 🔧 Int -> Boolean
         madre_id = this.madre_id,
         padre_id = this.padre_id
     )
@@ -69,7 +69,7 @@ fun AnimalEntity.toRequest(): AnimalRequest {
         estado_salud = this.estado_salud,
         madre_id = this.madre_id,
         padre_id = this.padre_id,
-        notas = this.notas ?: "" // Enviar string vacío en lugar de null si da problemas
+        notas = this.notas ?: ""
     )
 }
 
@@ -84,10 +84,10 @@ fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): Ani
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual, // Ya es Double? en el Request
+        peso_actual = this.peso_actual,
         estado_salud = this.estado_salud,
         notas = this.notas,
-        sincronizado = sincronizado,
+        sincronizado = if (sincronizado) true else false,  // 🔧 Boolean -> Int
         edad_meses = 0,
         madre_id = this.madre_id,
         padre_id = this.padre_id,
@@ -101,8 +101,8 @@ fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): Ani
 
 fun VacunaRequest.toEntity(sincronizado: Boolean = false): VacunaEntity {
     return VacunaEntity(
-        localId = 0, // Generado automáticamente por Room
-        id = null,   // Se llenará cuando la API responda
+        localId = 0,
+        id = null,
         animal_id = this.animal_id,
         nombre_vacuna = this.nombre_vacuna,
         fecha_aplicacion = this.fecha_aplicacion,
@@ -131,7 +131,7 @@ fun KPIsEntity.toDomain(): KPIs {
 
 fun KPIs.toEntity(): KPIsEntity {
     return KPIsEntity(
-        id = 1, // ID único para mantener siempre una sola fila de caché
+        id = 1,
         total_animales = this.total_animales,
         peso_promedio = this.peso_promedio ?: "0",
         total_hembras = this.total_hembras ?: "0",

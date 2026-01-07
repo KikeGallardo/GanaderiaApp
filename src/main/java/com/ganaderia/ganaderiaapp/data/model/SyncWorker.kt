@@ -35,35 +35,48 @@ class SyncWorker(
                 try {
                     val request = animalLocal.toRequest()
 
-                    // Si tiene ID del servidor, actualizar; si no, crear nuevo
                     if (animalLocal.id != null && animalLocal.id > 0) {
-                        Log.d("SyncWorker", "Actualizando animal: ${animalLocal.identificacion} (ID: ${animalLocal.id})")
-                        val resultado = repository.actualizarAnimalLocal(
-                            animalLocal.copy(sincronizado = true)
-                        )
-                        exitosos++
-                    } else {
-                        Log.d("SyncWorker", "Creando nuevo animal: ${animalLocal.identificacion}")
-                        val resultado = repository.registrarAnimalApiDirecto(request)
+                        // CASO: EDICIÓN PENDIENTE
+                        // Usamos kotlin.Result para evitar conflicto con el Result de WorkManager
+                        val resultado: kotlin.Result<com.ganaderia.ganaderiaapp.data.model.Animal> =
+                            repository.actualizarAnimalApiDirecto(animalLocal.id, request)
 
-                        resultado.onSuccess { animalServidor ->
-                            // Actualizar el registro local con el ID del servidor
-                            val entidadActualizada = animalLocal.copy(
-                                id = animalServidor.id,
-                                sincronizado = true
-                            )
-                            repository.actualizarAnimalLocal(entidadActualizada)
-                            Log.d("SyncWorker", "✓ Animal ${animalLocal.identificacion} sincronizado con ID ${animalServidor.id}")
+                        resultado.onSuccess {
+                            repository.actualizarAnimalLocal(animalLocal.copy(sincronizado = true))
                             exitosos++
                         }.onFailure { error ->
-                            Log.e("SyncWorker", "✗ Error sincronizando ${animalLocal.identificacion}: ${error.message}")
+                            fallidos++
+                        }
+                    } else {
+                        // CASO: CREACIÓN NUEVA PENDIENTE
+                        val resultado: kotlin.Result<com.ganaderia.ganaderiaapp.data.model.Animal> =
+                            repository.registrarAnimalApiDirecto(request)
+
+                        resultado.onSuccess { animalServidor ->
+                            repository.actualizarAnimalLocal(animalLocal.copy(
+                                id = animalServidor.id, // Aquí ya no fallará el ID
+                                sincronizado = true
+                            ))
+                            exitosos++
+                        }.onFailure {
                             fallidos++
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("SyncWorker", "✗ Excepción sincronizando ${animalLocal.identificacion}", e)
                     fallidos++
                 }
+            }
+
+            // Sincronizar KPIs al final
+            repository.sincronizarKPIs()
+
+            Log.d("SyncWorker", "=== SINCRONIZACIÓN COMPLETADA: $exitosos exitosos, $fallidos fallidos ===")
+
+            // Aquí SÍ usamos el Result de WorkManager (androidx.work.ListenableWorker.Result)
+            return if (fallidos > 0 && exitosos == 0) {
+                androidx.work.ListenableWorker.Result.retry()
+            } else {
+                androidx.work.ListenableWorker.Result.success()
             }
 
             // Sincronizar KPIs al final
