@@ -198,31 +198,38 @@ class GanadoRepository(
     }
 
     suspend fun registrarAnimal(animal: AnimalRequest, context: Context? = null): Result<Animal> = withContext(Dispatchers.IO) {
+        // 1. Insertar primero localmente como NO sincronizado
+        val entityInicial = animal.toEntity(sincronizado = false)
+        val localId = animalDao.insertarAnimal(entityInicial).toInt()
+
         try {
-            Log.d("GanadoRepository", "Intentando registrar animal: ${animal.identificacion}")
+            Log.d("GanadoRepository", "Intentando sincronizar registro: ${animal.identificacion}")
             val response = api.registrarAnimal(animal)
-            val nuevoAnimal = response.data
 
-            val entity = nuevoAnimal.toEntity(sincronizado = true)
-            animalDao.insertarAnimal(entity)
+            // El log indica que recibes {"success":true, "id":49}
+            if (response.success) {
+                // 2. ACTUALIZAR el mismo registro local usando el localId
+                // No intentes mapear 'response.data' porque el log muestra que viene nulo o incompleto
+                val entitySincronizada = entityInicial.copy(
+                    localId = localId,
+                    sincronizado = true,
+                    // Si el servidor mando un ID, lo guardamos opcionalmente
+                    // idServidor = response.id
+                )
 
-            sincronizarKPIs()
+                animalDao.insertarAnimal(entitySincronizada)
+                sincronizarKPIs()
 
-            Log.d("GanadoRepository", "Animal registrado exitosamente con ID ${nuevoAnimal.id}")
-            Result.success(nuevoAnimal)
-        } catch (e: Exception) {
-            Log.e("GanadoRepository", "Error registrando animal, guardando offline", e)
-            val entity = animal.toEntity(sincronizado = false)
-            val localId = animalDao.insertarAnimal(entity).toInt()
-            val animalLocal = entity.copy(localId = localId).toModel()
-
-            context?.let {
-                programarSincronizacion(it)
-                Log.d("GanadoRepository", "Sincronización programada para animal offline")
+                return@withContext Result.success(entitySincronizada.toModel())
             }
-
-            Result.success(animalLocal)
+        } catch (e: Exception) {
+            // Aquí caía antes por el NullPointerException del mapper
+            Log.e("GanadoRepository", "Error en sincronización, se mantiene offline", e)
         }
+
+        // 3. Si hubo error, el animal ya existe localmente (paso 1), solo programamos worker
+        context?.let { programarSincronizacion(it) }
+        Result.success(entityInicial.copy(localId = localId).toModel())
     }
 
     suspend fun refrescarNombresPadres(localId: Int, serverId: Int) = withContext(Dispatchers.IO) {
