@@ -25,13 +25,14 @@ import com.ganaderia.ganaderiaapp.data.model.VacunaRequest
 import com.ganaderia.ganaderiaapp.ui.viewmodel.DetalleAnimalViewModel
 import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import com.ganaderia.ganaderiaapp.ui.components.*
+import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalleAnimalScreen(
-    animalId: Int,
+    localId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEditar: (Int) -> Unit,
     navController: NavController,
@@ -50,8 +51,8 @@ fun DetalleAnimalScreen(
     var mostrarDialogoVacuna by remember { mutableStateOf(false) }
     var mostrarConfirmarBorrado by remember { mutableStateOf(false) }
 
-    LaunchedEffect(animalId) {
-        viewModel.cargarAnimal(animalId)
+    LaunchedEffect(localId) {
+        viewModel.cargarAnimal(localId)
     }
 
     Scaffold(
@@ -64,7 +65,7 @@ fun DetalleAnimalScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onNavigateToEditar(animalId) }) {
+                    IconButton(onClick = { onNavigateToEditar(localId) }) {
                         Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color(0xFF2E7D32))
                     }
                     IconButton(onClick = { mostrarConfirmarBorrado = true }) {
@@ -78,7 +79,7 @@ fun DetalleAnimalScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding).background(Color(0xFFF8F9FA))) {
             when {
                 isLoading -> LoadingScreen()
-                error != null -> ErrorScreen(error!!) { viewModel.cargarAnimal(animalId) }
+                error != null && animal == null -> ErrorScreen(error!!) { viewModel.cargarAnimal(localId) }
                 animal != null -> {
                     Column {
                         TabRow(
@@ -99,7 +100,7 @@ fun DetalleAnimalScreen(
                         when (tabSeleccionada) {
                             0 -> PestañaGeneralCompleta(animal!!)
                             1 -> PestañaSaludEstilizada(
-                                animalId = animalId,
+                                animalId = animal!!.id,
                                 vacunas = vacunas,
                                 viewModel = viewModel,
                                 onAgregar = { mostrarDialogoVacuna = true }
@@ -111,7 +112,6 @@ fun DetalleAnimalScreen(
         }
     }
 
-    // Diálogo de confirmación para borrar animal
     if (mostrarConfirmarBorrado) {
         AlertDialog(
             onDismissRequest = { mostrarConfirmarBorrado = false },
@@ -120,10 +120,8 @@ fun DetalleAnimalScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        animal?.id?.let { id ->
-                            viewModel.eliminarAnimal(id) {
-                                navController.popBackStack()
-                            }
+                        viewModel.eliminarAnimal(localId) {
+                            navController.popBackStack()
                         }
                         mostrarConfirmarBorrado = false
                     },
@@ -136,9 +134,9 @@ fun DetalleAnimalScreen(
         )
     }
 
-    if (mostrarDialogoVacuna) {
+    if (mostrarDialogoVacuna && animal?.id != null && animal!!.id > 0) {
         RegistrarVacunaDialog(
-            animalId = animalId,
+            animalId = animal!!.id,
             opcionesCatalogo = catalogo,
             onDismiss = { mostrarDialogoVacuna = false },
             onConfirm = { request ->
@@ -148,6 +146,15 @@ fun DetalleAnimalScreen(
             },
             onNuevaVacunaCatalogo = { nombre ->
                 viewModel.agregarAlCatalogo(nombre)
+            }
+        )
+    } else if (mostrarDialogoVacuna) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoVacuna = false },
+            title = { Text("Función no disponible") },
+            text = { Text("Las vacunas solo pueden registrarse cuando el animal está sincronizado con el servidor.") },
+            confirmButton = {
+                TextButton(onClick = { mostrarDialogoVacuna = false }) { Text("Entendido") }
             }
         )
     }
@@ -198,6 +205,19 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
             DetalleCard(titulo = "Producción") {
                 InfoRow(Icons.Default.MonitorWeight, "Peso Actual", "${animal.peso_actual ?: "---"} kg")
                 InfoRow(Icons.Default.DateRange, "Nacimiento", animal.fecha_nacimiento)
+                InfoRow(Icons.Default.DateRange, "Ingreso", animal.fecha_ingreso)
+            }
+        }
+
+        if (!animal.notas.isNullOrBlank()) {
+            item {
+                DetalleCard(titulo = "Notas") {
+                    Text(
+                        text = animal.notas ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GanadoColors.TextSecondary
+                    )
+                }
             }
         }
     }
@@ -212,7 +232,6 @@ fun VentanaFecha(onDateSelected: (String) -> Unit, onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(onClick = {
                 datePickerState.selectedDateMillis?.let { millis ->
-                    // Compatible con API 24 usando java.util.Calendar
                     val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
                     calendar.timeInMillis = millis
                     val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -227,10 +246,6 @@ fun VentanaFecha(onDateSelected: (String) -> Unit, onDismiss: () -> Unit) {
         DatePicker(state = datePickerState)
     }
 }
-
-// El resto de componentes (DetalleCard, InfoRow, RegistrarVacunaDialog, PestañaSaludEstilizada)
-// se mantienen igual que en tu código original, asegurando que PestañaSaludEstilizada
-// use el viewModel.eliminarVacuna(v.id, animalId).
 
 @Composable
 fun DetalleCard(titulo: String, contenido: @Composable ColumnScope.() -> Unit) {
@@ -258,6 +273,8 @@ fun InfoRow(icon: ImageVector, label: String, value: String) {
         }
     }
 }
+
+// Agregar esto al final del archivo DetalleAnimalScreen.kt que te di antes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -387,7 +404,7 @@ fun RegistrarVacunaDialog(
                                     value = proximaDosis,
                                     onValueChange = { },
                                     readOnly = true,
-                                    placeholder = { Text("dd/mm/aaaa") },
+                                    placeholder = { Text("Opcional") },
                                     trailingIcon = {
                                         IconButton(onClick = { showDatePickerProx = true }) {
                                             Icon(Icons.Default.DateRange, contentDescription = "Seleccionar fecha")
@@ -438,7 +455,8 @@ fun RegistrarVacunaDialog(
                             value = notas,
                             onValueChange = { notas = it },
                             placeholder = { Text("Observaciones...") },
-                            modifier = Modifier.fillMaxWidth().height(100.dp)
+                            modifier = Modifier.fillMaxWidth().height(100.dp),
+                            maxLines = 3
                         )
                     }
                 }
@@ -498,36 +516,43 @@ fun PestañaSaludEstilizada(
 
         if (vacunas.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No hay vacunas registradas", color = Color.Gray)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("💉", fontSize = 48.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("No hay vacunas registradas", color = Color.Gray)
+                }
             }
-        }
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(vacunas) { vacuna ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    ListItem(
-                        headlineContent = { Text(vacuna.nombre_vacuna, fontWeight = FontWeight.Bold) },
-                        supportingContent = {
-                            Column {
-                                Text("Fecha: ${vacuna.fecha_aplicacion.take(10)}")
-                                if (!vacuna.proxima_dosis.isNullOrBlank()) {
-                                    Text("Próxima: ${vacuna.proxima_dosis.take(10)}", color = Color(0xFFD32F2F))
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(vacunas) { vacuna ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        ListItem(
+                            headlineContent = { Text(vacuna.nombre_vacuna, fontWeight = FontWeight.Bold) },
+                            supportingContent = {
+                                Column {
+                                    Text("Aplicada: ${vacuna.fecha_aplicacion.take(10)}")
+                                    if (!vacuna.dosis.isNullOrBlank()) {
+                                        Text("Dosis: ${vacuna.dosis}")
+                                    }
+                                    if (!vacuna.proxima_dosis.isNullOrBlank()) {
+                                        Text("Próxima: ${vacuna.proxima_dosis.take(10)}", color = Color(0xFFD32F2F))
+                                    }
                                 }
+                            },
+                            trailingContent = {
+                                IconButton(onClick = { vacunaParaBorrar = vacuna }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color(0xFFC62828))
+                                }
+                            },
+                            leadingContent = {
+                                Icon(Icons.Default.MedicalServices, contentDescription = null, tint = Color(0xFF2E7D32))
                             }
-                        },
-                        trailingContent = {
-                            IconButton(onClick = { vacunaParaBorrar = vacuna }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color(0xFFC62828))
-                            }
-                        },
-                        leadingContent = {
-                            Icon(Icons.Default.MedicalServices, contentDescription = null, tint = Color(0xFF2E7D32))
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }

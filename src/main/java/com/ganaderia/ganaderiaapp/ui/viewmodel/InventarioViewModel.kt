@@ -29,8 +29,6 @@ class InventarioViewModel(private val repository: GanadoRepository) : ViewModel(
             _isLoading.value = true
             _error.value = null
 
-            // CORRECCIÓN: Usamos getAnimalesSinFiltros() que definimos en el Repositorio
-            // para evitar el error de "No value passed for parameter"
             repository.getAnimalesSinFiltros()
                 .onSuccess { lista ->
                     _animales.value = lista
@@ -43,9 +41,7 @@ class InventarioViewModel(private val repository: GanadoRepository) : ViewModel(
         }
     }
 
-    // Opcional: Función para refrescar manualmente (Pull-to-refresh)
     fun refrescar() {
         cargarAnimales()
     }
 }
-

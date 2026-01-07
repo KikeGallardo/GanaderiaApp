@@ -14,15 +14,11 @@ import com.ganaderia.ganaderiaapp.ui.screens.*
 import com.ganaderia.ganaderiaapp.ui.theme.GanadoTheme
 import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import com.ganaderia.ganaderiaapp.ui.viewmodel.FormularioAnimalViewModel
-import com.ganaderia.ganaderiaapp.data.repository.GanadoRepository
 import androidx.compose.ui.platform.LocalContext
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Aquí deberías obtener la instancia de tu repositorio
-        // Normalmente se hace a través de un Singleton o una clase Application
-        // val repository = (application as GanaderiaApp).repository
 
         setContent {
             GanadoTheme {
@@ -40,7 +36,6 @@ fun AppNavigation() {
         navController = navController,
         startDestination = "dashboard"
     ) {
-        // 1. Dashboard
         composable("dashboard") {
             DashboardScreen(
                 onNavigateToInventario = {
@@ -49,12 +44,10 @@ fun AppNavigation() {
             )
         }
 
-        // 2. Inventario (Lista de Animales)
         composable("inventario") {
             InventarioScreen(
-                onNavigateToDetalle = { id ->
-                    // Usamos 'id' directamente porque es lo que envía InventarioScreen
-                    navController.navigate("detalle/$id")
+                onNavigateToDetalle = { localId ->
+                    navController.navigate("detalle/$localId")
                 },
                 onNavigateToFormulario = {
                     navController.navigate("formulario")
@@ -65,18 +58,16 @@ fun AppNavigation() {
             )
         }
 
-        // 3. Detalle del Animal
         composable(
-            route = "detalle/{animalId}",
+            route = "detalle/{localId}",
             arguments = listOf(
-                navArgument("animalId") { type = NavType.IntType } // Esto le dice a Android que convierta el texto a número
+                navArgument("localId") { type = NavType.IntType }
             )
         ) { backStackEntry ->
-            // Ahora getInt("animalId") funcionará correctamente y no dará error
-            val animalId = backStackEntry.arguments?.getInt("animalId") ?: 0
+            val localId = backStackEntry.arguments?.getInt("localId") ?: 0
 
             DetalleAnimalScreen(
-                animalId = animalId,
+                localId = localId,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
@@ -87,7 +78,6 @@ fun AppNavigation() {
             )
         }
 
-        // 4. Formulario (Crear Nuevo)
         composable("formulario") {
             val context = LocalContext.current
             val viewModel: FormularioAnimalViewModel = viewModel(
@@ -101,26 +91,22 @@ fun AppNavigation() {
             )
         }
 
-        // 5. Formulario (Editar Existente)
-        // 5. Formulario (Editar Existente)
         composable(
-            route = "formulario/{animalId}",
+            route = "formulario/{localId}",
             arguments = listOf(
-                navArgument("animalId") { type = NavType.IntType }
+                navArgument("localId") { type = NavType.IntType }
             )
         ) { backStackEntry ->
-            val animalId = backStackEntry.arguments?.getInt("animalId")
+            val localId = backStackEntry.arguments?.getInt("localId")
             val context = LocalContext.current
 
-            // 1. Necesitas crear el ViewModel aquí también
             val viewModel: FormularioAnimalViewModel = viewModel(
                 factory = GanadoViewModelFactory(context)
             )
 
-            // 2. Pásalo a la pantalla
             FormularioAnimalScreen(
-                animalId = animalId,
-                viewModel = viewModel, // <--- Esto es lo que faltaba
+                animalId = localId,
+                viewModel = viewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

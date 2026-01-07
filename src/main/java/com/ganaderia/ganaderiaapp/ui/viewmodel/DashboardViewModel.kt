@@ -13,10 +13,9 @@ class DashboardViewModel(private val repository: GanadoRepository) : ViewModel()
     private val _kpis = MutableStateFlow<KPIs?>(null)
     val kpis: StateFlow<KPIs?> = _kpis
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    // Nuevo estado para el botón de sincronización forzada
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing
 
@@ -29,39 +28,38 @@ class DashboardViewModel(private val repository: GanadoRepository) : ViewModel()
 
     fun cargarKPIs() {
         viewModelScope.launch {
-            // 1. Escuchar la DB local permanentemente
-            repository.getKPIsLocales().collect { localKpis ->
-                if (localKpis != null) {
-                    _kpis.value = localKpis
+            _isLoading.value = true
+            _error.value = null
+
+            try {
+                repository.getKPIs().collect { kpis ->
+                    _kpis.value = kpis
+                    _isLoading.value = false
+                }
+            } catch (e: Exception) {
+                repository.getKPIsLocales().collect { localKpis ->
+                    if (localKpis != null) {
+                        _kpis.value = localKpis
+                        _error.value = "Mostrando datos guardados (sin conexión)"
+                    } else {
+                        _error.value = "No hay conexión y no hay datos guardados"
+                    }
                     _isLoading.value = false
                 }
             }
         }
-
-        viewModelScope.launch {
-            try {
-                if (kpis.value == null) _isLoading.value = true
-                repository.sincronizarKPIs()
-            } catch (e: Exception) {
-                _error.value = null
-            } finally {
-                _isLoading.value = false
-            }
-        }
     }
 
-    // --- NUEVA FUNCIÓN PARA EL BOTÓN ---
     fun forzarSincronizacion() {
         viewModelScope.launch {
             _isSyncing.value = true
             _error.value = null
+
             try {
-                // Llamamos a la nueva función del repositorio que actualiza TODO
                 repository.forceSync()
-                // Opcional: recargar explícitamente después de la sincronización
                 repository.sincronizarKPIs()
             } catch (e: Exception) {
-                _error.value = "Error: ${e.message}"
+                _error.value = "Error de conexión: ${e.message}"
             } finally {
                 _isSyncing.value = false
             }

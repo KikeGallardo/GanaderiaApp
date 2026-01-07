@@ -20,16 +20,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
-import retrofit2.Response
 
 class GanadoRepository(
+    private val api: GanadoApiService,
     private val animalDao: AnimalDao,
     private val vacunaDao: VacunaDao,
-    private val kpiDao: KpiDao,
-    private val api: GanadoApiService
+    private val kpiDao: KpiDao
 ) {
 
-    // 1. DASHBOARD: Flujo híbrido (Local primero, luego remoto)
     suspend fun getKPIs(): Flow<KPIs> = flow {
         val local = kpiDao.getKPIs().firstOrNull()
         if (local != null) {
@@ -41,129 +39,107 @@ class GanadoRepository(
             kpiDao.insertKPIs(remoto.toEntity())
             emit(remoto)
         } catch (e: Exception) {
-            // Error de red: El flow termina o se queda con lo local
+            if (local == null) {
+                throw e
+            }
         }
     }
 
-    // 2. DASHBOARD: Solo local (Para observar cambios)
     fun getKPIsLocales(): Flow<KPIs?> {
         return kpiDao.getKPIs().map { it?.toDomain() }
     }
 
-    // 3. DASHBOARD: Forzar actualización de red
     suspend fun sincronizarKPIs() {
         try {
             val remoto = api.getKPIs()
             kpiDao.insertKPIs(remoto.toEntity())
         } catch (e: Exception) {
-            // Falló el modo online, no hacemos nada
+            e.printStackTrace()
         }
     }
 
-    // 4. INVENTARIO: Lógica Offline-First
     suspend fun getAnimales(): Result<List<Animal>> = withContext(Dispatchers.IO) {
         try {
-            // 1. Intentar descargar la lista fresca del servidor
             val response = api.getAnimales()
             val animalesApi = response.data
 
-            // 2. Sincronizar los datos de la API con Room
-            // Opcional: Podrías marcar cuáles vinieron de la API para borrar los que ya no están
             animalesApi.forEach { animalApi ->
-                // Buscamos si ya existe el animal por su "identificacion" (arete)
                 val localExistente = animalDao.getAnimalByIdentificacion(animalApi.identificacion)
-
-                // Mapeamos a entidad usando el localId encontrado (si existe)
-                // Esto es lo que evita que se dupliquen las tarjetas
                 val entidad = animalApi.toEntity(
                     sincronizado = true,
                     localId = localExistente?.localId ?: 0
                 )
-
-                // Insertamos (si el localId coincide, Room reemplaza los datos)
                 animalDao.insertarAnimal(entidad)
             }
-
         } catch (e: Exception) {
-            // Log del error para depuración, pero no bloqueamos al usuario
             e.printStackTrace()
         }
 
-        // 3. LA ÚNICA FUENTE DE VERDAD
-        // Leemos de Room. Aquí aparecerán:
-        // - Los que acabamos de bajar/actualizar (nube verde)
-        // - Los que creamos offline y aún no se suben (nube tachada)
         val listaDesdeBD = animalDao.getAllAnimales().map { it.toModel() }
-
         Result.success(listaDesdeBD)
     }
 
     suspend fun forceSync() = withContext(Dispatchers.IO) {
         try {
             val response = api.getAnimales()
-            val listaAnimales: List<Animal> = response.data ?: emptyList()
+            val listaAnimales = response.data
 
-            if (listaAnimales.isNotEmpty()) {
-                listaAnimales.forEach { animalApi ->
-                    // IMPORTANTE: Buscar si ya existe localmente para no perder el localId
-                    val localExistente = animalDao.getAnimalByIdentificacion(animalApi.identificacion)
-
-                    val entity = animalApi.toEntity(
-                        sincronizado = true,
-                        localId = localExistente?.localId ?: 0 // Mantenemos el ID local si existe
-                    )
-                    animalDao.insertarAnimal(entity)
-                }
+            listaAnimales.forEach { animalApi ->
+                val localExistente = animalDao.getAnimalByIdentificacion(animalApi.identificacion)
+                val entity = animalApi.toEntity(
+                    sincronizado = true,
+                    localId = localExistente?.localId ?: 0
+                )
+                animalDao.insertarAnimal(entity)
             }
-            // Forzamos también la actualización de KPIs para el Dashboard
+
             sincronizarKPIs()
         } catch (e: Exception) {
             e.printStackTrace()
+            throw e
         }
     }
 
-    suspend fun registrarAnimal(animal: AnimalRequest): Result<Animal> = withContext(Dispatchers.IO) {
+    // CORRECCIÓN: Programar sincronización automática después de guardar offline
+    suspend fun registrarAnimal(animal: AnimalRequest, context: Context? = null): Result<Animal> = withContext(Dispatchers.IO) {
         try {
             val response = api.registrarAnimal(animal)
             val nuevoAnimal = response.data
             animalDao.insertarAnimal(nuevoAnimal.toEntity(sincronizado = true))
             Result.success(nuevoAnimal)
         } catch (e: Exception) {
-            // Si falla internet al registrar, lo guardamos localmente como no sincronizado
+            // Modo offline: guardar localmente
             val entity = animal.toEntity(sincronizado = false)
-            animalDao.insertarAnimal(entity)
-            Result.failure(e)
+            val localId = animalDao.insertarAnimal(entity).toInt()
+            val animalLocal = entity.copy(localId = localId).toModel()
+
+            // NUEVO: Programar sincronización automática si hay contexto
+            context?.let { programarSincronizacion(it) }
+
+            Result.success(animalLocal)
         }
     }
 
-    suspend fun marcarComoSincronizado(id: Int) = withContext(Dispatchers.IO) {
-        val entity = animalDao.getAnimalById(id)
-        entity?.let {
-            animalDao.insertarAnimal(it.copy(sincronizado = true))
-        }
-    }
-
-    // 6. OTRAS FUNCIONES (Catalogo, Vacunas, etc.)
-    // Cambia el parámetro de Int a Int (usaremos el localId)
-    suspend fun getAnimalById(localId: Int): Result<Animal> = withContext(Dispatchers.IO) {
-        // 1. Buscamos siempre primero en Room usando el localId
+    suspend fun getAnimalByLocalId(localId: Int): Result<Animal> = withContext(Dispatchers.IO) {
         val local = animalDao.getAnimalByLocalId(localId)
 
         if (local != null) {
-            // 2. Si existe localmente y NO está sincronizado, devolvemos el local de una vez
             if (!local.sincronizado) {
                 return@withContext Result.success(local.toModel())
             }
 
-            // 3. Si está sincronizado, intentamos refrescar desde la API usando el ID del servidor
             try {
-                val response = api.getAnimalById(local.id!!)
-                val animalServidor = response.data
-                // Actualizamos el registro local con lo que diga el servidor
-                animalDao.insertarAnimal(animalServidor.toEntity(sincronizado = true, localId = local.localId))
-                Result.success(animalServidor)
+                if (local.id != null) {
+                    val response = api.getAnimalById(local.id)
+                    val animalServidor = response.data
+                    animalDao.insertarAnimal(
+                        animalServidor.toEntity(sincronizado = true, localId = local.localId)
+                    )
+                    Result.success(animalServidor)
+                } else {
+                    Result.success(local.toModel())
+                }
             } catch (e: Exception) {
-                // Si falla la red, devolvemos lo que ya teníamos en Room
                 Result.success(local.toModel())
             }
         } else {
@@ -171,7 +147,8 @@ class GanadoRepository(
         }
     }
 
-    // 1. Esta función solo se comunica con el Servidor (Usada por el Worker)
+    suspend fun getAnimalById(id: Int): Result<Animal> = getAnimalByLocalId(id)
+
     suspend fun registrarAnimalApiDirecto(animal: AnimalRequest): Result<Animal> = withContext(Dispatchers.IO) {
         try {
             val response = api.registrarAnimal(animal)
@@ -185,16 +162,11 @@ class GanadoRepository(
         }
     }
 
-    // 2. Esta función actualiza Room de forma segura (Usada por el Worker)
     suspend fun actualizarAnimalLocal(entidad: AnimalEntity) = withContext(Dispatchers.IO) {
-        // Como tu entidad tiene @PrimaryKey(autoGenerate = true) en localId,
-        // Room buscará ese localId y reemplazará toda la fila con la nueva info (id del servidor y sincronizado = true)
         animalDao.insertarAnimal(entidad)
     }
 
-    // 3. Función auxiliar que necesita el Worker para obtener los pendientes
     suspend fun getAnimalesNoSincronizados(): List<AnimalEntity> = withContext(Dispatchers.IO) {
-        // Asegúrate de tener esta consulta en tu AnimalDao
         animalDao.getAnimalesPorEstadoSincronizacion(false)
     }
 
@@ -219,14 +191,11 @@ class GanadoRepository(
         return getAnimales()
     }
 
-    // --- 7. VACUNAS Y CATÁLOGO (Faltaban estas funciones) ---
-
     suspend fun getVacunas(animalId: Int): Result<List<Vacuna>> = withContext(Dispatchers.IO) {
         try {
             val response = api.getVacunas(animalId)
             Result.success(response.data)
         } catch (e: Exception) {
-            // Aquí podrías opcionalmente cargar vacunas locales si tuvieras un VacunaDao.getAll(animalId)
             Result.failure(e)
         }
     }
@@ -236,7 +205,6 @@ class GanadoRepository(
             val response = api.getCatalogo()
             Result.success(response.data ?: emptyList())
         } catch (e: Exception) {
-            // Si falla la red, el ViewModel usará la lista por defecto que ya programaste
             Result.failure(e)
         }
     }
@@ -259,54 +227,85 @@ class GanadoRepository(
         }
     }
 
-    suspend fun eliminarAnimal(id: Int): Result<Unit> = withContext(Dispatchers.IO) {
+    // CORRECCIÓN: Eliminar y actualizar KPIs
+    suspend fun eliminarAnimalByLocalId(localId: Int): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // 1. Intentar borrar en el servidor
-            val response = api.eliminarAnimal(id)
-            // 2. Si tiene éxito o falla, borramos localmente para que desaparezca de la vista
-            animalDao.eliminarAnimalPorId(id)
+            val animal = animalDao.getAnimalByLocalId(localId)
+
+            // Intentar borrar en API si tiene ID del servidor
+            if (animal?.id != null && animal.id > 0) {
+                try {
+                    api.eliminarAnimal(animal.id)
+                } catch (e: Exception) {
+                    // Error de red, continuamos con borrado local
+                    e.printStackTrace()
+                }
+            }
+
+            // CORRECCIÓN: Marcar como inactivo localmente
+            animalDao.eliminarPorLocalId(localId)
+
+            // NUEVO: Actualizar KPIs después de eliminar
+            sincronizarKPIs()
+
             Result.success(Unit)
         } catch (e: Exception) {
-            // MODO OFFLINE: Borramos de la DB local para que el usuario vea que "se fue"
-            // Nota: En una app profesional, marcarías un campo 'isDeleted' para sincronizar luego,
-            // pero para arreglar el botón ahora, lo borramos localmente:
-            animalDao.eliminarAnimalPorId(id)
-            Result.success(Unit)
+            Result.failure(e)
         }
     }
+
+    suspend fun eliminarAnimal(id: Int): Result<Unit> = eliminarAnimalByLocalId(id)
 
     suspend fun registrarVacuna(request: VacunaRequest): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val response = api.registrarVacuna(request)
-            // Guardamos copia local marcada como sincronizada si el servidor respondió bien
             vacunaDao.insertVacuna(request.toEntity(sincronizado = response.success))
             Result.success(Unit)
         } catch (e: Exception) {
-            // OFFLINE: Guardamos localmente para subir después
             vacunaDao.insertVacuna(request.toEntity(sincronizado = false))
-            Result.success(Unit) // Retornamos éxito para que la UI cierre el formulario
+            Result.success(Unit)
         }
     }
 
-    suspend fun actualizarAnimal(id: Int, animal: AnimalRequest): Result<Animal> =
+    // CORRECCIÓN: Programar sincronización después de actualizar offline
+    suspend fun actualizarAnimalByLocalId(localId: Int, animal: AnimalRequest, context: Context? = null): Result<Animal> =
         withContext(Dispatchers.IO) {
+            val animalExistente = animalDao.getAnimalByLocalId(localId)
+
+            if (animalExistente == null) {
+                return@withContext Result.failure(Exception("Animal no encontrado"))
+            }
+
             try {
-                // 1. Intentar actualizar en el servidor
-                val response = api.actualizarAnimal(id, animal)
-                val animalActualizado = response.data
+                if (animalExistente.id != null) {
+                    val response = api.actualizarAnimal(animalExistente.id, animal)
+                    val animalActualizado = response.data
 
-                // 2. Guardar en la base de datos local y marcar como sincronizado
-                animalDao.insertarAnimal(animalActualizado.toEntity(sincronizado = true))
+                    animalDao.insertarAnimal(
+                        animalActualizado.toEntity(sincronizado = true, localId = localId)
+                    )
+                    Result.success(animalActualizado)
+                } else {
+                    val entityOffline = animal.toEntity(sincronizado = false, localId = localId)
+                    animalDao.insertarAnimal(entityOffline)
 
-                Result.success(animalActualizado)
+                    // NUEVO: Programar sincronización
+                    context?.let { programarSincronizacion(it) }
+
+                    Result.success(entityOffline.toModel())
+                }
             } catch (e: Exception) {
-                // 3. MODO OFFLINE: Si falla internet, actualizamos lo local
-                // pero marcamos sincronizado = false para que el Worker lo suba después
-                val entityOffline = animal.toEntity(sincronizado = false).copy(id = id)
+                val entityOffline = animal.toEntity(sincronizado = false, localId = localId)
+                    .copy(id = animalExistente.id)
                 animalDao.insertarAnimal(entityOffline)
 
-                // Convertimos la entidad a modelo para que la UI se actualice
+                // NUEVO: Programar sincronización
+                context?.let { programarSincronizacion(it) }
+
                 Result.success(entityOffline.toModel())
             }
         }
+
+    suspend fun actualizarAnimal(id: Int, animal: AnimalRequest): Result<Animal> =
+        actualizarAnimalByLocalId(id, animal)
 }

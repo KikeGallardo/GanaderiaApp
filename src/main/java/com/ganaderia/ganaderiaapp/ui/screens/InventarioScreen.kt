@@ -1,7 +1,5 @@
-// ============================================
-// Archivo: ui/screens/InventarioScreen.kt
-// ============================================
 package com.ganaderia.ganaderiaapp.ui.screens
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,14 +21,12 @@ import com.ganaderia.ganaderiaapp.ui.viewmodel.InventarioViewModel
 import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import androidx.compose.foundation.lazy.items
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventarioScreen(
     onNavigateToDetalle: (Int) -> Unit,
     onNavigateToFormulario: () -> Unit,
     onNavigateBack: () -> Unit,
-    // CORRECCIÓN: Usamos la factory que ya creaste pasando el contexto
     viewModel: InventarioViewModel = viewModel(
         factory = GanadoViewModelFactory(androidx.compose.ui.platform.LocalContext.current)
     )
@@ -42,74 +38,96 @@ fun InventarioScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Inventario") },
+                title = { Text("Inventario de Ganado", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
-                }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.refrescar() }) {
+                        Icon(Icons.Default.Refresh, "Actualizar", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = GanadoColors.Primary,
+                    titleContentColor = Color.White
+                )
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToFormulario) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir Animal")
+            ExtendedFloatingActionButton(
+                onClick = onNavigateToFormulario,
+                containerColor = GanadoColors.Primary,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Nuevo Animal")
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (isLoading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            if (error != null) {
-                Text(
-                    text = "Error: $error",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = GanadoColors.Primary
                 )
             }
 
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(animales) { animal ->
-                    AnimalItem(
-                        animal = animal,
-                        onClick = { onNavigateToDetalle(animal.id) }
-                    )
+            if (error != null && animales.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Sin conexión - Mostrando datos locales",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun AnimalItem(animal: Animal, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "ID: ${animal.identificacion}", style = MaterialTheme.typography.titleLarge)
-                Text(text = "Raza: ${animal.raza}", style = MaterialTheme.typography.bodyMedium)
-                Text(text = "Peso: ${animal.peso_actual ?: "---"} kg", style = MaterialTheme.typography.bodyMedium)
+            when {
+                error != null && animales.isEmpty() -> {
+                    ErrorScreen(error!!) { viewModel.refrescar() }
+                }
+
+                animales.isEmpty() && !isLoading -> {
+                    EmptyState(
+                        icono = "🐄",
+                        titulo = "No hay animales registrados",
+                        mensaje = "Presiona el botón + para agregar tu primer animal"
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(animales) { animal ->
+                            AnimalCard(
+                                animal = animal,
+                                onClick = { onNavigateToDetalle(animal.localId) }
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
+                    }
+                }
             }
-
-            // Icono de sincronización
-            Icon(
-                imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                contentDescription = null,
-                tint = if (animal.sincronizado) Color.Green else Color.Gray
-            )
-
-            Icon(Icons.Default.ChevronRight, contentDescription = null)
         }
     }
 }
@@ -124,7 +142,7 @@ fun AnimalCard(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -140,13 +158,26 @@ fun AnimalCard(
                     ),
                     color = GanadoColors.Primary
                 )
-                BadgeChip(
-                    texto = animal.sexo,
-                    backgroundColor = if (animal.sexo == "Macho")
-                        GanadoColors.BadgeMacho
-                    else
-                        GanadoColors.BadgeHembra
-                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                        contentDescription = if (animal.sincronizado) "Sincronizado" else "Pendiente",
+                        tint = if (animal.sincronizado) GanadoColors.Success else Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    BadgeChip(
+                        texto = animal.sexo,
+                        backgroundColor = if (animal.sexo == "Macho")
+                            GanadoColors.BadgeMacho
+                        else
+                            GanadoColors.BadgeHembra
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -173,11 +204,11 @@ fun AnimalCard(
             ) {
                 InfoItem(
                     icono = Icons.Default.MonitorWeight,
-                    texto = "${animal.peso_actual ?: "N/A"} kg"
+                    texto = "${animal.peso_actual ?: "---"} kg"
                 )
                 InfoItem(
                     icono = Icons.Default.CalendarToday,
-                    texto = "${animal.edad_meses ?: 0} meses"
+                    texto = "${animal.edad_meses} meses"
                 )
                 InfoItem(
                     icono = Icons.Default.HealthAndSafety,

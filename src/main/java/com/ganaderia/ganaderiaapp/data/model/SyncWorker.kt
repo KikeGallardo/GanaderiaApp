@@ -16,36 +16,31 @@ class SyncWorker(
     override suspend fun doWork(): Result {
         val database = GanadoDatabase.getDatabase(applicationContext)
         val repository = GanadoRepository(
-            database.animalDao(),
-            database.vacunaDao(),
-            database.kpiDao(),
-            RetrofitClient.instance
+            api = RetrofitClient.instance,
+            animalDao = database.animalDao(),
+            vacunaDao = database.vacunaDao(),
+            kpiDao = database.kpiDao()
         )
 
         return try {
-            // 1. Obtener solo los que no están en el servidor
             val noSincronizados: List<AnimalEntity> = repository.getAnimalesNoSincronizados()
 
             noSincronizados.forEach { animalLocal ->
-                // 2. Intentar registrar en el servidor
                 val request = animalLocal.toRequest()
-                val resultado = repository.registrarAnimalApiDirecto(request) // Usar función que solo toque API
+                val resultado = repository.registrarAnimalApiDirecto(request)
 
                 resultado.onSuccess { animalServidor ->
-                    // 3. ¡CLAVE!: Actualizamos el registro local usando el localId original
-                    // pero ahora le ponemos el ID que nos dio el servidor y sincronizado = true
                     val entidadActualizada = animalLocal.copy(
-                        id = animalServidor.id, // El ID real del servidor (ej. 45)
+                        id = animalServidor.id,
                         sincronizado = true
                     )
 
-                    // Guardamos (esto reemplaza la fila vieja por el localId)
                     repository.actualizarAnimalLocal(entidadActualizada)
                 }
             }
+
             Result.success()
         } catch (e: Exception) {
-            // Si es un error de red, intentamos más tarde
             Result.retry()
         }
     }

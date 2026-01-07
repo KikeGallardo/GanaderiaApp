@@ -28,25 +28,27 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
         "IBR/DVB", "Clostridiasis", "Brucelosis", "Leptospirosis"
     )
 
-    fun cargarAnimal(id: Int) {
+    fun cargarAnimal(localId: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-            // No borramos el animal actual para evitar parpadeos si ya había algo
-            repository.getAnimalById(id)
-                .onSuccess {
-                    _animal.value = it
-                    _error.value = null // Si hay éxito (red o local), quitamos el error
-                    cargarVacunas(id)
+            _error.value = null
+
+            repository.getAnimalByLocalId(localId)
+                .onSuccess { animal ->
+                    _animal.value = animal
+
+                    if (animal.id > 0) {
+                        cargarVacunas(animal.id)
+                    }
+
                     cargarCatalogo()
                 }
                 .onFailure { e ->
-                    // MODO HÍBRIDO: Solo mostramos la pantalla de error si NO hay datos locales
                     if (_animal.value == null) {
-                        _error.value = "Sin conexión: ${e.message}"
+                        _error.value = "Error al cargar animal: ${e.message}"
                     }
-                    // Si _animal.value NO es nulo, significa que el repositorio ya nos dio
-                    // los datos locales a través del onSuccess antes de fallar la red.
                 }
+
             _isLoading.value = false
         }
     }
@@ -56,23 +58,20 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.getVacunas(animalId)
                 .onSuccess {
                     _vacunas.value = it
-                    // No tocamos _error para no sobreescribir errores del animal
                 }
                 .onFailure {
-                    // Fallo silencioso: si no hay red, simplemente no actualiza la lista
+                    // Fallo silencioso
                 }
-            _isLoading.value = false
         }
     }
 
     fun cargarCatalogo() {
         viewModelScope.launch {
             repository.obtenerCatalogoVacunas()
-                .onSuccess { lista: List<String> ->
+                .onSuccess { lista ->
                     _catalogoVacunas.value = lista.ifEmpty { catalogoPorDefecto }
                 }
                 .onFailure {
-                    // MODO OFFLINE: Si falla la red, usamos la lista local sin disparar un estado de Error crítico
                     if (_catalogoVacunas.value.isEmpty()) {
                         _catalogoVacunas.value = catalogoPorDefecto
                     }
@@ -86,20 +85,18 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
                 .onSuccess {
                     cargarCatalogo()
                 }
-                .onFailure { e ->
-                    // Aquí sí es útil avisar, pero quizás con un Toast o snackbar (vía eventos)
-                    // Por ahora evitamos bloquear la pantalla principal
-                }
         }
     }
 
-    fun eliminarAnimal(id: Int, onSuccess: () -> Unit) {
+    fun eliminarAnimal(localId: Int, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
-            repository.eliminarAnimal(id)
+
+            repository.eliminarAnimalByLocalId(localId)
                 .onSuccess {
                     _isLoading.value = false
-                    onSuccess() // Esto cerrará la pantalla y volverá al inventario
+                    // CORRECCIÓN: Cerrar pantalla inmediatamente
+                    onSuccess()
                 }
                 .onFailure {
                     _error.value = "Error al eliminar: ${it.message}"
@@ -111,13 +108,15 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
     fun eliminarVacuna(vacunaId: Int, animalId: Int) {
         viewModelScope.launch {
             _isLoading.value = true
+
             repository.eliminarVacuna(vacunaId)
                 .onSuccess {
                     cargarVacunas(animalId)
                 }
-                .onFailure { t ->
-                    _error.value = "No se pudo eliminar: ${t.message}"
+                .onFailure {
+                    _error.value = "No se pudo eliminar: ${it.message}"
                 }
+
             _isLoading.value = false
         }
     }
@@ -130,8 +129,6 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
                     onSuccess()
                 }
                 .onFailure {
-                    // Si falla el registro, el repositorio ya lo guardó localmente (sincronizado = false)
-                    // Así que refrescamos y cerramos el diálogo con éxito
                     cargarVacunas(vacuna.animal_id)
                     onSuccess()
                 }

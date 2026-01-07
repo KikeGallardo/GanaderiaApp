@@ -1,5 +1,6 @@
 package com.ganaderia.ganaderiaapp.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ganaderia.ganaderiaapp.data.model.*
@@ -7,7 +8,10 @@ import com.ganaderia.ganaderiaapp.data.repository.GanadoRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class FormularioAnimalViewModel(private val repository: GanadoRepository) : ViewModel() {
+class FormularioAnimalViewModel(
+    private val repository: GanadoRepository,
+    private val context: Context
+) : ViewModel() {
 
     private val _hembras = MutableStateFlow<List<AnimalSimple>>(emptyList())
     val hembras = _hembras.asStateFlow()
@@ -37,28 +41,28 @@ class FormularioAnimalViewModel(private val repository: GanadoRepository) : View
                 .onSuccess { lista ->
                     _hembras.value = lista
                         .filter { it.sexo.equals("Hembra", ignoreCase = true) }
-                        .map { AnimalSimple(it.id, it.identificacion, it.raza) }
+                        .map { AnimalSimple(it.localId, it.identificacion, it.raza) }
 
                     _machos.value = lista
                         .filter { it.sexo.equals("Macho", ignoreCase = true) }
-                        .map { AnimalSimple(it.id, it.identificacion, it.raza) }
+                        .map { AnimalSimple(it.localId, it.identificacion, it.raza) }
                 }
                 .onFailure {
-                    // En modo offline, esto fallará si no hay caché, pero no bloqueamos el flujo
+                    // Modo offline
                 }
         }
     }
 
-    fun cargarAnimal(id: Int) {
+    fun cargarAnimal(localId: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-            repository.getAnimalById(id)
+            repository.getAnimalByLocalId(localId)
                 .onSuccess {
                     _animalActual.value = it
                     _error.value = null
                 }
                 .onFailure {
-                    _error.value = "Cargando datos locales..."
+                    _error.value = "Error al cargar animal: ${it.message}"
                 }
             _isLoading.value = false
         }
@@ -70,21 +74,22 @@ class FormularioAnimalViewModel(private val repository: GanadoRepository) : View
             _error.value = null
 
             val resultado = if (_animalActual.value == null) {
-                repository.registrarAnimal(animal)
+                // CORRECCIÓN: Pasar contexto para sincronización automática
+                repository.registrarAnimal(animal, context)
             } else {
-                repository.actualizarAnimal(_animalActual.value!!.id, animal)
+                // CORRECCIÓN: Pasar contexto para sincronización automática
+                repository.actualizarAnimalByLocalId(_animalActual.value!!.localId, animal, context)
             }
 
-            resultado.onSuccess {
-                _isLoading.value = false
-                _operacionExitosa.emit(true)
-            }.onFailure {
-                // MODIFICACIÓN CLAVE PARA MODO OFFLINE:
-                // Aunque falle la API, el Repositorio ya guardó en la base de datos local.
-                // Cerramos la pantalla para que el usuario vea el nuevo animal en su lista.
-                _isLoading.value = false
-                _operacionExitosa.emit(true)
-            }
+            resultado
+                .onSuccess {
+                    _isLoading.value = false
+                    _operacionExitosa.emit(true)
+                }
+                .onFailure {
+                    _isLoading.value = false
+                    _operacionExitosa.emit(true)
+                }
         }
     }
 

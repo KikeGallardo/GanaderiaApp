@@ -30,7 +30,7 @@ fun DashboardScreen(
 
     val kpis by viewModel.kpis.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState() // <--- Nuevo estado
+    val isSyncing by viewModel.isSyncing.collectAsState()
     val error by viewModel.error.collectAsState()
 
     Scaffold(
@@ -42,10 +42,9 @@ fun DashboardScreen(
                     titleContentColor = Color.White
                 ),
                 actions = {
-                    // Botón de sincronización con estado visual
                     IconButton(
                         onClick = { viewModel.forzarSincronizacion() },
-                        enabled = !isSyncing // Evita múltiples clics
+                        enabled = !isSyncing
                     ) {
                         if (isSyncing) {
                             CircularProgressIndicator(
@@ -54,7 +53,7 @@ fun DashboardScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Icon(Icons.Default.Sync, "Forzar Sincronización", tint = Color.White)
+                            Icon(Icons.Default.Sync, "Sincronizar", tint = Color.White)
                         }
                     }
                 }
@@ -74,27 +73,24 @@ fun DashboardScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-
             when {
                 isLoading && kpis == null -> {
                     LoadingScreen()
                 }
 
                 error != null && kpis == null -> {
-                    ErrorScreen(error!!) { viewModel.forzarSincronizacion() }
+                    ErrorScreen(error!!) { viewModel.cargarKPIs() }
                 }
 
                 kpis != null -> {
                     val currentKpis = kpis!!
-                    // ... (resto de tu lógica de conversión de datos igual)
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Indicador de progreso lineal si hay cualquier tipo de carga
-                        if (isLoading || isSyncing) {
+                        if (isSyncing) {
                             item {
                                 LinearProgressIndicator(
                                     modifier = Modifier.fillMaxWidth().height(4.dp),
@@ -104,40 +100,124 @@ fun DashboardScreen(
                             }
                         }
 
-                        // ... (tus items de KPICards se mantienen igual)
-
                         item {
                             Text(
                                 text = "Resumen General",
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = GanadoColors.TextPrimary
                             )
                         }
 
-                        // ... Resto de la lista (Total Animales, Peso, etc.)
+                        item {
+                            KPICard(
+                                titulo = "Total de Animales",
+                                valor = currentKpis.total_animales.toString(),
+                                subtitulo = "En el inventario",
+                                color = GanadoColors.Primary
+                            )
+                        }
+
+                        item {
+                            KPICard(
+                                titulo = "Peso Promedio",
+                                valor = currentKpis.peso_promedio ?: "0 kg",
+                                subtitulo = "Del ganado",
+                                color = GanadoColors.Secondary
+                            )
+                        }
+
+                        item {
+                            Text(
+                                text = "Distribución por Sexo",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = GanadoColors.TextPrimary
+                            )
+                        }
+
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                KPICard(
+                                    titulo = "Hembras",
+                                    valor = currentKpis.total_hembras ?: "0",
+                                    color = GanadoColors.BadgeHembra,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                KPICard(
+                                    titulo = "Machos",
+                                    valor = currentKpis.total_machos ?: "0",
+                                    color = GanadoColors.BadgeMacho,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        item {
+                            Text(
+                                text = "Estado de Salud",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = GanadoColors.TextPrimary
+                            )
+                        }
+
+                        item {
+                            KPICard(
+                                titulo = "En Tratamiento",
+                                valor = currentKpis.en_tratamiento ?: "0",
+                                subtitulo = "Animales con atención médica",
+                                color = GanadoColors.Warning
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
                     }
+                }
+
+                else -> {
+                    EmptyState(
+                        icono = "📊",
+                        titulo = "Sin datos disponibles",
+                        mensaje = "Sincroniza para cargar el dashboard"
+                    )
                 }
             }
 
-            // Notificación de error si falla la sincronización forzada pero hay datos
             if (error != null && kpis != null) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp),
+                        .padding(bottom = 100.dp, start = 16.dp, end = 16.dp)
+                        .fillMaxWidth(),
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     shadowElevation = 4.dp
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = error ?: "Error de conexión",
                             color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.labelMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }

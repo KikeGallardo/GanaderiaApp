@@ -27,7 +27,8 @@ class GanadoViewModelFactory(private val context: Context) : ViewModelProvider.F
                 DetalleAnimalViewModel(repository) as T
             }
             modelClass.isAssignableFrom(FormularioAnimalViewModel::class.java) -> {
-                FormularioAnimalViewModel(repository) as T
+                // CORRECCIÓN: Pasar contexto al FormularioViewModel
+                FormularioAnimalViewModel(repository, context) as T
             }
             modelClass.isAssignableFrom(InventarioViewModel::class.java) -> {
                 InventarioViewModel(repository) as T
