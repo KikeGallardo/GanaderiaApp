@@ -19,10 +19,6 @@ interface AnimalDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarAnimal(animal: AnimalEntity): Long
 
-<<<<<<< HEAD
-    // 🔧 FIX: Query corregido para campo booleano
-=======
->>>>>>> parent of 4eebf21 (Final con detalles)
     @Query("SELECT * FROM animales WHERE sincronizado = 0 AND activo = 1")
     suspend fun getNoSincronizados(): List<AnimalEntity>
 
