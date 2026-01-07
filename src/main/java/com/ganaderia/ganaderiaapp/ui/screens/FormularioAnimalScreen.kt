@@ -71,12 +71,12 @@ fun FormularioAnimalScreen(
                 categoriaSeleccionada = animal.categoria
                 fechaNacimiento = animal.fecha_nacimiento.take(10)
                 fechaIngreso = animal.fecha_ingreso.take(10)
-                pesoActual = animal.peso_actual ?: ""
+                pesoActual = animal.peso_actual?.toString() ?: ""  // CAMBIADO: de String directo a toString()
                 estadoSalud = animal.estado_salud
                 notas = animal.notas ?: ""
 
-                madreSeleccionada = hembras.find { it.identificacion == animal.madre_identificacion }?.id
-                padreSeleccionado = machos.find { it.identificacion == animal.padre_identificacion }?.id
+                madreSeleccionada = animal.madre_id  // CAMBIADO: ahora es Int directamente
+                padreSeleccionado = animal.padre_id  // CAMBIADO: ahora es Int directamente
 
                 datosYaCargados = true
             }
@@ -188,7 +188,7 @@ fun FormularioAnimalScreen(
             item {
                 SelectorDropdown(
                     label = "Estado de Salud *",
-                    opciones = listOf("Bueno", "Regular", "Malo", "En Tratamiento"),
+                    opciones = listOf("Excelente", "Bueno", "Regular", "En Tratamiento"),
                     seleccionado = estadoSalud,
                     onSeleccion = { estadoSalud = it }
                 )
@@ -236,10 +236,10 @@ fun FormularioAnimalScreen(
                                 categoria = categoriaSeleccionada,
                                 fecha_nacimiento = fechaNacimiento,
                                 fecha_ingreso = fechaIngreso,
-                                peso_actual = pesoActual.toDoubleOrNull(),
+                                peso_actual = pesoActual.toDoubleOrNull(),  // CAMBIADO: ahora es Double
                                 estado_salud = estadoSalud,
-                                madre_id = madreSeleccionada,
-                                padre_id = padreSeleccionado,
+                                madre_id = madreSeleccionada,  // CAMBIADO: ahora es Int
+                                padre_id = padreSeleccionado,  // CAMBIADO: ahora es Int
                                 notas = notas.ifBlank { null }
                             )
 

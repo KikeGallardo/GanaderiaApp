@@ -20,6 +20,7 @@ import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import com.ganaderia.ganaderiaapp.ui.viewmodel.InventarioViewModel
 import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,23 +29,57 @@ fun InventarioScreen(
     onNavigateToFormulario: () -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: InventarioViewModel = viewModel(
-        factory = GanadoViewModelFactory(androidx.compose.ui.platform.LocalContext.current)
+        factory = GanadoViewModelFactory(LocalContext.current)
     )
 ) {
+    val context = LocalContext.current
     val animales by viewModel.animales.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
     val error by viewModel.error.collectAsState()
+
+    // Contar animales sincronizados y no sincronizados
+    val animalesSincronizados = animales.count { it.sincronizado }
+    val animalesNoSincronizados = animales.count { !it.sincronizado }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Inventario de Ganado", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Inventario de Ganado", fontWeight = FontWeight.Bold)
+                        if (animalesNoSincronizados > 0) {
+                            Text(
+                                "$animalesNoSincronizados pendientes de sincronizar",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
                 },
                 actions = {
+                    // Botón para forzar sincronización
+                    if (animalesNoSincronizados > 0) {
+                        IconButton(
+                            onClick = { viewModel.forzarSincronizacion(context) },
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.CloudUpload, "Sincronizar pendientes", tint = Color.White)
+                            }
+                        }
+                    }
                     IconButton(onClick = { viewModel.refrescar() }) {
                         Icon(Icons.Default.Refresh, "Actualizar", tint = Color.White)
                     }
@@ -69,10 +104,10 @@ fun InventarioScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (isLoading) {
+            if (isLoading || isSyncing) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
-                    color = GanadoColors.Primary
+                    color = if (isSyncing) Color(0xFFFF9800) else GanadoColors.Primary
                 )
             }
 
@@ -132,6 +167,8 @@ fun InventarioScreen(
     }
 }
 
+// Reemplazar solo la función AnimalCard en InventarioScreen.kt
+
 @Composable
 fun AnimalCard(
     animal: Animal,
@@ -151,13 +188,20 @@ fun AnimalCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = animal.identificacion,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = GanadoColors.Primary
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = animal.identificacion,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = GanadoColors.Primary
+                    )
+                    Text(
+                        text = "Local ID: ${animal.localId} | Server ID: ${animal.id}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -166,7 +210,7 @@ fun AnimalCard(
                     Icon(
                         imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudOff,
                         contentDescription = if (animal.sincronizado) "Sincronizado" else "Pendiente",
-                        tint = if (animal.sincronizado) GanadoColors.Success else Color.Gray,
+                        tint = if (animal.sincronizado) GanadoColors.Success else Color(0xFFFF9800),
                         modifier = Modifier.size(20.dp)
                     )
 
@@ -204,7 +248,7 @@ fun AnimalCard(
             ) {
                 InfoItem(
                     icono = Icons.Default.MonitorWeight,
-                    texto = "${animal.peso_actual ?: "---"} kg"
+                    texto = "${animal.peso_actual?.let { "%.2f".format(it) } ?: "---"} kg"  // CAMBIADO: formato de Double
                 )
                 InfoItem(
                     icono = Icons.Default.CalendarToday,

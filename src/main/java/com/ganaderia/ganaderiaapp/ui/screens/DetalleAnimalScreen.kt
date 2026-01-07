@@ -203,7 +203,11 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
 
         item {
             DetalleCard(titulo = "Producción") {
-                InfoRow(Icons.Default.MonitorWeight, "Peso Actual", "${animal.peso_actual ?: "---"} kg")
+                InfoRow(
+                    Icons.Default.MonitorWeight,
+                    "Peso Actual",
+                    "${animal.peso_actual?.let { "%.2f".format(it) } ?: "---"} kg"  // CAMBIADO: formato de Double
+                )
                 InfoRow(Icons.Default.DateRange, "Nacimiento", animal.fecha_nacimiento)
                 InfoRow(Icons.Default.DateRange, "Ingreso", animal.fecha_ingreso)
             }

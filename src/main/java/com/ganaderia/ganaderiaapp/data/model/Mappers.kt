@@ -4,30 +4,28 @@ import com.ganaderia.ganaderiaapp.data.local.entities.AnimalEntity
 import com.ganaderia.ganaderiaapp.data.local.entities.KPIsEntity
 import com.ganaderia.ganaderiaapp.data.local.entities.VacunaEntity
 
-// Conversión de Animal (API) a AnimalEntity (BD Local)
+// 1. Animal -> Entity
 fun Animal.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntity {
     return AnimalEntity(
-        localId = localId, // <--- Ahora aceptamos el ID de Room
-        id = this.id,      // El ID del servidor
+        localId = localId,
+        id = this.id,
         identificacion = this.identificacion,
         raza = this.raza,
         sexo = this.sexo,
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual,
+        peso_actual = this.peso_actual.toString(), // Convertir a String si la Entity lo requiere
         estado_salud = this.estado_salud,
         notas = this.notas,
         sincronizado = sincronizado,
         edad_meses = this.edad_meses ?: 0,
-        madre_identificacion = this.madre_identificacion,
-        padre_identificacion = this.padre_identificacion,
         activo = this.activo
+        // Elimina madre_identificacion/padre_identificacion si no existen en AnimalEntity
     )
 }
 
-// Conversión de AnimalEntity (BD Local) a Animal (App/UI)
-// 1. Corregir el paso de Entity a Model (UI)
+// 2. Entity -> Model
 fun AnimalEntity.toModel(): Animal {
     return Animal(
         localId = this.localId,
@@ -38,19 +36,17 @@ fun AnimalEntity.toModel(): Animal {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual,
+        peso_actual = this.peso_actual?.toDoubleOrNull() ?: 0.0, // Conversión segura
         estado_salud = this.estado_salud,
         notas = this.notas,
         edad_meses = this.edad_meses,
-        madre_identificacion = this.madre_identificacion,
-        madre_raza = this.madre_raza,
-        padre_identificacion = this.padre_identificacion,
-        padre_raza = this.padre_raza,
         activo = this.activo,
-        sincronizado = this.sincronizado // <--- CAMBIO: Usar el valor real de la BD
+        sincronizado = this.sincronizado
+        // Elimina los campos 'madre_raza', 'padre_raza', etc., si Animal no los tiene
     )
 }
 
+// 3. Entity -> Request (Para API)
 fun AnimalEntity.toRequest(): AnimalRequest {
     return AnimalRequest(
         identificacion = this.identificacion,
@@ -59,18 +55,38 @@ fun AnimalEntity.toRequest(): AnimalRequest {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toDoubleOrNull(), // Convertimos String a Double para la API
+        peso_actual = this.peso_actual?.toDoubleOrNull(), // String -> Double
         estado_salud = this.estado_salud,
-        madre_id = null, // Opcional, según tu lógica
+        madre_id = null,
         padre_id = null,
         notas = this.notas
     )
 }
 
-// ESTA ES LA FUNCIÓN QUE TE FALTABA PARA QUITAR EL ROJO EN EL REPOSITORIO
+// 4. Request -> Entity
+fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): AnimalEntity {
+    return AnimalEntity(
+        localId = localId,
+        id = null,
+        identificacion = this.identificacion,
+        raza = this.raza,
+        sexo = this.sexo,
+        categoria = this.categoria,
+        fecha_nacimiento = this.fecha_nacimiento,
+        fecha_ingreso = this.fecha_ingreso ?: "",
+        peso_actual = this.peso_actual?.toString() ?: "0.0", // Double -> String
+        estado_salud = this.estado_salud,
+        notas = this.notas,
+        sincronizado = sincronizado,
+        edad_meses = 0,
+        activo = 1
+    )
+}
+
+// 5. VacunaRequest -> Entity
 fun VacunaRequest.toEntity(sincronizado: Boolean = false): VacunaEntity {
     return VacunaEntity(
-        id = 0, // Autoincrementable
+        id = 0,
         animal_id = this.animal_id,
         nombre_vacuna = this.nombre_vacuna,
         fecha_aplicacion = this.fecha_aplicacion,
@@ -83,33 +99,7 @@ fun VacunaRequest.toEntity(sincronizado: Boolean = false): VacunaEntity {
     )
 }
 
-// Conversión de AnimalRequest (Lo que envías) a AnimalEntity (BD Local) para modo Offline
-// 2. Corregir AnimalRequest a Entity (Para edición o guardado local)
-fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): AnimalEntity {
-    return AnimalEntity(
-        localId = localId, // <--- CAMBIO: Si pasamos el localId, Room actualizará en lugar de duplicar
-        id = null,
-        identificacion = this.identificacion,
-        raza = this.raza,
-        sexo = this.sexo,
-        categoria = this.categoria,
-        fecha_nacimiento = this.fecha_nacimiento,
-        fecha_ingreso = this.fecha_ingreso ?: "",
-        peso_actual = this.peso_actual?.toString() ?: "0",
-        estado_salud = this.estado_salud,
-        notas = this.notas,
-        sincronizado = sincronizado,
-        edad_meses = 0,
-        madre_identificacion = null,
-        madre_raza = null,
-        padre_identificacion = null,
-        padre_raza = null,
-        activo = 1
-    )
-}
-
-
-// Convierte de Base de Datos (Entity) a Objeto de Negocio (Domain/UI)
+// 6. KPIs
 fun KPIsEntity.toDomain(): KPIs {
     return KPIs(
         total_animales = this.total_animales,
@@ -120,10 +110,9 @@ fun KPIsEntity.toDomain(): KPIs {
     )
 }
 
-// Convierte de Servidor (KPIs) a Base de Datos (Entity) para guardar el caché
 fun KPIs.toEntity(): KPIsEntity {
     return KPIsEntity(
-        id = 1, // ID fijo para que siempre sea una sola fila
+        id = 1,
         total_animales = this.total_animales,
         peso_promedio = this.peso_promedio ?: "0",
         total_hembras = this.total_hembras ?: "0",

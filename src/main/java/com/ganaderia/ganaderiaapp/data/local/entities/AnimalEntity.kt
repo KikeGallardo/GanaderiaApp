@@ -13,14 +13,12 @@ data class AnimalEntity(
     val categoria: String,
     val fecha_nacimiento: String,
     val fecha_ingreso: String,
-    val peso_actual: String?,
+    val peso_actual: Double?,  // CAMBIADO: de String a Double
     val estado_salud: String,
     val notas: String?,
     val sincronizado: Boolean = true,
     val edad_meses: Int = 0,
-    val madre_identificacion: String? = null,
-    val madre_raza: String? = null,
-    val padre_identificacion: String? = null,
-    val padre_raza: String? = null,
+    val madre_id: Int? = null,  // CAMBIADO: de String a Int
+    val padre_id: Int? = null,  // CAMBIADO: de String a Int
     val activo: Int = 1
 )

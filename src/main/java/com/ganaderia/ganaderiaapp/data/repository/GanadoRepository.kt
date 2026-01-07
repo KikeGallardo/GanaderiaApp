@@ -1,6 +1,7 @@
 package com.ganaderia.ganaderiaapp.data.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
@@ -53,7 +54,9 @@ class GanadoRepository(
         try {
             val remoto = api.getKPIs()
             kpiDao.insertKPIs(remoto.toEntity())
+            Log.d("GanadoRepository", "KPIs sincronizados correctamente")
         } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error sincronizando KPIs", e)
             e.printStackTrace()
         }
     }
@@ -64,14 +67,16 @@ class GanadoRepository(
             val animalesApi = response.data
 
             animalesApi.forEach { animalApi ->
-                val localExistente = animalDao.getAnimalByIdentificacion(animalApi.identificacion)
+                val localExistente = animalDao.getAnimalByServerId(animalApi.id)
                 val entidad = animalApi.toEntity(
                     sincronizado = true,
                     localId = localExistente?.localId ?: 0
                 )
                 animalDao.insertarAnimal(entidad)
             }
+            Log.d("GanadoRepository", "Sincronizados ${animalesApi.size} animales desde API")
         } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error obteniendo animales de API", e)
             e.printStackTrace()
         }
 
@@ -81,11 +86,15 @@ class GanadoRepository(
 
     suspend fun forceSync() = withContext(Dispatchers.IO) {
         try {
+            // 1. Sincronizar animales no sincronizados primero
+            sincronizarAnimalesPendientes()
+
+            // 2. Obtener todos los animales del servidor
             val response = api.getAnimales()
             val listaAnimales = response.data
 
             listaAnimales.forEach { animalApi ->
-                val localExistente = animalDao.getAnimalByIdentificacion(animalApi.identificacion)
+                val localExistente = animalDao.getAnimalByServerId(animalApi.id)
                 val entity = animalApi.toEntity(
                     sincronizado = true,
                     localId = localExistente?.localId ?: 0
@@ -93,28 +102,79 @@ class GanadoRepository(
                 animalDao.insertarAnimal(entity)
             }
 
+            // 3. Actualizar KPIs
             sincronizarKPIs()
+
+            Log.d("GanadoRepository", "Sincronización forzada completada")
         } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error en sincronización forzada", e)
             e.printStackTrace()
             throw e
         }
     }
 
-    // CORRECCIÓN: Programar sincronización automática después de guardar offline
+    private suspend fun sincronizarAnimalesPendientes() = withContext(Dispatchers.IO) {
+        try {
+            val noSincronizados = animalDao.getNoSincronizados()
+            Log.d("GanadoRepository", "Sincronizando ${noSincronizados.size} animales pendientes")
+
+            noSincronizados.forEach { animalLocal ->
+                try {
+                    val request = animalLocal.toRequest()
+
+                    // Si el animal tiene ID del servidor, actualizar; si no, crear
+                    if (animalLocal.id != null && animalLocal.id > 0) {
+                        Log.d("GanadoRepository", "Actualizando animal en servidor: ${animalLocal.identificacion} (ID servidor: ${animalLocal.id})")
+                        val response = api.actualizarAnimal(animalLocal.id, request)
+                        if (response.success) {
+                            val entidadActualizada = animalLocal.copy(sincronizado = true)
+                            animalDao.insertarAnimal(entidadActualizada)
+                        }
+                    } else {
+                        Log.d("GanadoRepository", "Creando nuevo animal en servidor: ${animalLocal.identificacion}")
+                        val response = api.registrarAnimal(request)
+                        if (response.success) {
+                            val animalServidor = response.data
+                            val entidadActualizada = animalLocal.copy(
+                                id = animalServidor.id,
+                                sincronizado = true
+                            )
+                            animalDao.insertarAnimal(entidadActualizada)
+                            Log.d("GanadoRepository", "Animal ${animalLocal.identificacion} sincronizado con ID ${animalServidor.id}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("GanadoRepository", "Error sincronizando animal ${animalLocal.identificacion}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error en sincronizarAnimalesPendientes", e)
+        }
+    }
+
     suspend fun registrarAnimal(animal: AnimalRequest, context: Context? = null): Result<Animal> = withContext(Dispatchers.IO) {
         try {
+            Log.d("GanadoRepository", "Intentando registrar animal: ${animal.identificacion}")
             val response = api.registrarAnimal(animal)
             val nuevoAnimal = response.data
-            animalDao.insertarAnimal(nuevoAnimal.toEntity(sincronizado = true))
+
+            val entity = nuevoAnimal.toEntity(sincronizado = true)
+            animalDao.insertarAnimal(entity)
+
+            sincronizarKPIs()
+
+            Log.d("GanadoRepository", "Animal registrado exitosamente con ID ${nuevoAnimal.id}")
             Result.success(nuevoAnimal)
         } catch (e: Exception) {
-            // Modo offline: guardar localmente
+            Log.e("GanadoRepository", "Error registrando animal, guardando offline", e)
             val entity = animal.toEntity(sincronizado = false)
             val localId = animalDao.insertarAnimal(entity).toInt()
             val animalLocal = entity.copy(localId = localId).toModel()
 
-            // NUEVO: Programar sincronización automática si hay contexto
-            context?.let { programarSincronizacion(it) }
+            context?.let {
+                programarSincronizacion(it)
+                Log.d("GanadoRepository", "Sincronización programada para animal offline")
+            }
 
             Result.success(animalLocal)
         }
@@ -124,25 +184,31 @@ class GanadoRepository(
         val local = animalDao.getAnimalByLocalId(localId)
 
         if (local != null) {
+            Log.d("GanadoRepository", "Animal encontrado - localId: ${local.localId}, serverId: ${local.id}, sincronizado: ${local.sincronizado}")
+
             if (!local.sincronizado) {
+                Log.d("GanadoRepository", "Devolviendo animal local no sincronizado: ${local.identificacion}")
                 return@withContext Result.success(local.toModel())
             }
 
             try {
-                if (local.id != null) {
+                if (local.id != null && local.id > 0) {
                     val response = api.getAnimalById(local.id)
                     val animalServidor = response.data
                     animalDao.insertarAnimal(
                         animalServidor.toEntity(sincronizado = true, localId = local.localId)
                     )
+                    Log.d("GanadoRepository", "Animal actualizado desde servidor: ${animalServidor.identificacion}")
                     Result.success(animalServidor)
                 } else {
                     Result.success(local.toModel())
                 }
             } catch (e: Exception) {
+                Log.e("GanadoRepository", "Error obteniendo animal del servidor, usando local", e)
                 Result.success(local.toModel())
             }
         } else {
+            Log.e("GanadoRepository", "Animal no encontrado con localId: $localId")
             Result.failure(Exception("Animal no encontrado"))
         }
     }
@@ -185,6 +251,8 @@ class GanadoRepository(
             ExistingWorkPolicy.REPLACE,
             syncRequest
         )
+
+        Log.d("GanadoRepository", "Worker de sincronización programado")
     }
 
     suspend fun getAnimalesSinFiltros(): Result<List<Animal>> {
@@ -227,29 +295,44 @@ class GanadoRepository(
         }
     }
 
-    // CORRECCIÓN: Eliminar y actualizar KPIs
     suspend fun eliminarAnimalByLocalId(localId: Int): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val animal = animalDao.getAnimalByLocalId(localId)
 
-            // Intentar borrar en API si tiene ID del servidor
-            if (animal?.id != null && animal.id > 0) {
-                try {
-                    api.eliminarAnimal(animal.id)
-                } catch (e: Exception) {
-                    // Error de red, continuamos con borrado local
-                    e.printStackTrace()
-                }
+            if (animal == null) {
+                Log.e("GanadoRepository", "Animal no encontrado con localId: $localId")
+                return@withContext Result.failure(Exception("Animal no encontrado"))
             }
 
-            // CORRECCIÓN: Marcar como inactivo localmente
-            animalDao.eliminarPorLocalId(localId)
+            Log.d("GanadoRepository", "Eliminando animal - localId: ${animal.localId}, serverId: ${animal.id}, identificacion: ${animal.identificacion}")
 
-            // NUEVO: Actualizar KPIs después de eliminar
+            // Solo intentar borrar en API si:
+            // 1. Tiene ID del servidor (id > 0)
+            // 2. Está sincronizado (para evitar intentar borrar algo que nunca se subió)
+            if (animal.id != null && animal.id > 0 && animal.sincronizado) {
+                try {
+                    Log.d("GanadoRepository", "Intentando eliminar del servidor con ID: ${animal.id}")
+                    val response = api.eliminarAnimal(animal.id)
+                    Log.d("GanadoRepository", "Animal eliminado del servidor exitosamente")
+                } catch (e: Exception) {
+                    // Si falla el borrado en servidor (404, 500, etc), continuamos con borrado local
+                    // El 404 significa que ya no existe en servidor, así que está bien
+                    Log.w("GanadoRepository", "Error eliminando del servidor (posiblemente ya eliminado): ${e.message}")
+                }
+            } else {
+                Log.d("GanadoRepository", "Animal no sincronizado o sin ID servidor, solo se eliminará localmente")
+            }
+
+            // Siempre marcar como inactivo localmente
+            animalDao.eliminarPorLocalId(localId)
+            Log.d("GanadoRepository", "Animal marcado como inactivo localmente")
+
+            // Actualizar KPIs
             sincronizarKPIs()
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error eliminando animal", e)
             Result.failure(e)
         }
     }
@@ -267,45 +350,54 @@ class GanadoRepository(
         }
     }
 
-    // CORRECCIÓN: Programar sincronización después de actualizar offline
-    suspend fun actualizarAnimalByLocalId(localId: Int, animal: AnimalRequest, context: Context? = null): Result<Animal> =
-        withContext(Dispatchers.IO) {
-            val animalExistente = animalDao.getAnimalByLocalId(localId)
+    suspend fun actualizarAnimalByLocalId(
+        localId: Int,
+        animal: AnimalRequest,
+        context: Context? = null
+    ): Result<Animal> = withContext(Dispatchers.IO) {
+        val animalExistente = animalDao.getAnimalByLocalId(localId)
 
-            if (animalExistente == null) {
-                return@withContext Result.failure(Exception("Animal no encontrado"))
-            }
+        if (animalExistente == null) {
+            Log.e("GanadoRepository", "Animal no encontrado con localId: $localId")
+            return@withContext Result.failure(Exception("Animal no encontrado"))
+        }
 
-            try {
-                if (animalExistente.id != null) {
-                    val response = api.actualizarAnimal(animalExistente.id, animal)
-                    val animalActualizado = response.data
+        Log.d("GanadoRepository", "Actualizando animal - localId: ${animalExistente.localId}, serverId: ${animalExistente.id}, sincronizado: ${animalExistente.sincronizado}")
 
-                    animalDao.insertarAnimal(
-                        animalActualizado.toEntity(sincronizado = true, localId = localId)
-                    )
-                    Result.success(animalActualizado)
-                } else {
-                    val entityOffline = animal.toEntity(sincronizado = false, localId = localId)
-                    animalDao.insertarAnimal(entityOffline)
+        try {
+            if (animalExistente.id != null && animalExistente.id > 0) {
+                Log.d("GanadoRepository", "Actualizando animal en servidor ID: ${animalExistente.id}")
+                val response = api.actualizarAnimal(animalExistente.id, animal)
+                val animalActualizado = response.data
 
-                    // NUEVO: Programar sincronización
-                    context?.let { programarSincronizacion(it) }
+                val entity = animalActualizado.toEntity(sincronizado = true, localId = localId)
+                animalDao.insertarAnimal(entity)
 
-                    Result.success(entityOffline.toModel())
-                }
-            } catch (e: Exception) {
+                sincronizarKPIs()
+
+                Log.d("GanadoRepository", "Animal actualizado exitosamente: ${animalActualizado.identificacion}")
+                Result.success(animalActualizado)
+            } else {
+                Log.d("GanadoRepository", "Animal sin ID servidor, guardando localmente para sincronización posterior")
                 val entityOffline = animal.toEntity(sincronizado = false, localId = localId)
-                    .copy(id = animalExistente.id)
                 animalDao.insertarAnimal(entityOffline)
 
-                // NUEVO: Programar sincronización
                 context?.let { programarSincronizacion(it) }
 
                 Result.success(entityOffline.toModel())
             }
-        }
+        } catch (e: Exception) {
+            Log.e("GanadoRepository", "Error actualizando animal, guardando offline", e)
+            val entityOffline = animal.toEntity(sincronizado = false, localId = localId)
+                .copy(id = animalExistente.id)
+            animalDao.insertarAnimal(entityOffline)
 
-    suspend fun actualizarAnimal(id: Int, animal: AnimalRequest): Result<Animal> =
-        actualizarAnimalByLocalId(id, animal)
+            context?.let { programarSincronizacion(it) }
+
+            Result.success(entityOffline.toModel())
+        }
+    }
+
+    suspend fun actualizarAnimal(id: Int, animal: AnimalRequest, context: Context? = null): Result<Animal> =
+        actualizarAnimalByLocalId(id, animal, context)
 }
