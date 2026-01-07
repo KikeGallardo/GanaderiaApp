@@ -4,7 +4,11 @@ import com.ganaderia.ganaderiaapp.data.local.entities.AnimalEntity
 import com.ganaderia.ganaderiaapp.data.local.entities.KPIsEntity
 import com.ganaderia.ganaderiaapp.data.local.entities.VacunaEntity
 
-// 1. Animal -> Entity
+/**
+ * MAPPERS PARA ANIMALES
+ */
+
+// 1. Convertir de Modelo (UI) a Entidad (Base de Datos)
 fun Animal.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntity {
     return AnimalEntity(
         localId = localId,
@@ -15,17 +19,18 @@ fun Animal.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntity {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual.toString(), // Convertir a String si la Entity lo requiere
+        peso_actual = this.peso_actual?.toDoubleOrNull(), // String? -> Double?
         estado_salud = this.estado_salud,
         notas = this.notas,
+        edad_meses = this.edad_meses,
+        madre_id = null, // Ajustar según lógica de negocio si es necesario
+        padre_id = null,
         sincronizado = sincronizado,
-        edad_meses = this.edad_meses ?: 0,
-        activo = this.activo
-        // Elimina madre_identificacion/padre_identificacion si no existen en AnimalEntity
+        activo = 1
     )
 }
 
-// 2. Entity -> Model
+// 2. Convertir de Entidad (Base de Datos) a Modelo (UI)
 fun AnimalEntity.toModel(): Animal {
     return Animal(
         localId = this.localId,
@@ -36,17 +41,22 @@ fun AnimalEntity.toModel(): Animal {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toDoubleOrNull() ?: 0.0, // Conversión segura
+        peso_actual = this.peso_actual?.toString(), // Double? -> String?
         estado_salud = this.estado_salud,
         notas = this.notas,
+        madre_identificacion = null, // Estos campos no existen en AnimalEntity actualmente
+        madre_raza = null,
+        padre_identificacion = null,
+        padre_raza = null,
         edad_meses = this.edad_meses,
         activo = this.activo,
-        sincronizado = this.sincronizado
-        // Elimina los campos 'madre_raza', 'padre_raza', etc., si Animal no los tiene
+        sincronizado = this.sincronizado,
+        madre_id = this.madre_id,
+        padre_id = this.padre_id
     )
 }
 
-// 3. Entity -> Request (Para API)
+// 3. Convertir de Entidad (Base de Datos) a Request (API)
 fun AnimalEntity.toRequest(): AnimalRequest {
     return AnimalRequest(
         identificacion = this.identificacion,
@@ -55,15 +65,15 @@ fun AnimalEntity.toRequest(): AnimalRequest {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toDoubleOrNull(), // String -> Double
+        peso_actual = this.peso_actual,
         estado_salud = this.estado_salud,
-        madre_id = null,
-        padre_id = null,
-        notas = this.notas
+        madre_id = this.madre_id,
+        padre_id = this.padre_id,
+        notas = this.notas ?: "" // Enviar string vacío en lugar de null si da problemas
     )
 }
 
-// 4. Request -> Entity
+// 4. Convertir de Request (API) a Entidad (Base de Datos)
 fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): AnimalEntity {
     return AnimalEntity(
         localId = localId,
@@ -73,33 +83,42 @@ fun AnimalRequest.toEntity(sincronizado: Boolean = false, localId: Int = 0): Ani
         sexo = this.sexo,
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
-        fecha_ingreso = this.fecha_ingreso ?: "",
-        peso_actual = this.peso_actual?.toString() ?: "0.0", // Double -> String
+        fecha_ingreso = this.fecha_ingreso,
+        peso_actual = this.peso_actual, // Ya es Double? en el Request
         estado_salud = this.estado_salud,
         notas = this.notas,
         sincronizado = sincronizado,
         edad_meses = 0,
+        madre_id = this.madre_id,
+        padre_id = this.padre_id,
         activo = 1
     )
 }
 
-// 5. VacunaRequest -> Entity
+/**
+ * MAPPERS PARA VACUNAS
+ */
+
 fun VacunaRequest.toEntity(sincronizado: Boolean = false): VacunaEntity {
     return VacunaEntity(
-        id = 0,
+        localId = 0, // Generado automáticamente por Room
+        id = null,   // Se llenará cuando la API responda
         animal_id = this.animal_id,
         nombre_vacuna = this.nombre_vacuna,
         fecha_aplicacion = this.fecha_aplicacion,
         dosis = this.dosis,
-        sincronizado = sincronizado,
-        lote = this.lote ?: "",
-        veterinario = this.veterinario ?: "",
-        proxima_dosis = this.proxima_dosis ?: "",
-        observaciones = this.observaciones ?: ""
+        lote = this.lote,
+        veterinario = this.veterinario,
+        proxima_dosis = this.proxima_dosis,
+        observaciones = this.observaciones,
+        sincronizado = sincronizado
     )
 }
 
-// 6. KPIs
+/**
+ * MAPPERS PARA KPIs
+ */
+
 fun KPIsEntity.toDomain(): KPIs {
     return KPIs(
         total_animales = this.total_animales,
@@ -112,7 +131,7 @@ fun KPIsEntity.toDomain(): KPIs {
 
 fun KPIs.toEntity(): KPIsEntity {
     return KPIsEntity(
-        id = 1,
+        id = 1, // ID único para mantener siempre una sola fila de caché
         total_animales = this.total_animales,
         peso_promedio = this.peso_promedio ?: "0",
         total_hembras = this.total_hembras ?: "0",

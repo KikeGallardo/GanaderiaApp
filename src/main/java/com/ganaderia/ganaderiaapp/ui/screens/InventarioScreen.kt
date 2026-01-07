@@ -197,7 +197,7 @@ fun AnimalCard(
                         color = GanadoColors.Primary
                     )
                     Text(
-                        text = "Local ID: ${animal.localId} | Server ID: ${animal.id}",
+                        text = "Local ID: ${animal.localId} | Server ID: ${if(animal.id == 0) "Pendiente" else animal.id}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
@@ -246,9 +246,14 @@ fun AnimalCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // CORRECCIÓN AQUÍ: Convertir String? a Double? antes de formatear
+                val pesoFormateado = animal.peso_actual?.toDoubleOrNull()?.let {
+                    "%.2f kg".format(it)
+                } ?: "--- kg"
+
                 InfoItem(
                     icono = Icons.Default.MonitorWeight,
-                    texto = "${animal.peso_actual?.let { "%.2f".format(it) } ?: "---"} kg"  // CAMBIADO: formato de Double
+                    texto = pesoFormateado
                 )
                 InfoItem(
                     icono = Icons.Default.CalendarToday,

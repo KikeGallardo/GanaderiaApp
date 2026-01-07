@@ -23,7 +23,9 @@ data class Animal(
     val padre_raza: String?,
     val edad_meses: Int,
     val activo: Int = 1,
-    val sincronizado: Boolean
+    val sincronizado: Boolean,
+    val madre_id: Int?,
+    val padre_id: Int?
 ) : Parcelable
 
 @Parcelize

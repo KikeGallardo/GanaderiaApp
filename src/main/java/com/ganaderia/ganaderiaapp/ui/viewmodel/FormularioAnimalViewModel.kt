@@ -73,12 +73,18 @@ class FormularioAnimalViewModel(
             _isLoading.value = true
             _error.value = null
 
-            val resultado = if (_animalActual.value == null) {
-                // CORRECCIÓN: Pasar contexto para sincronización automática
+            val actual = _animalActual.value
+
+            val resultado = if (actual == null) {
+                // POST
                 repository.registrarAnimal(animal, context)
             } else {
-                // CORRECCIÓN: Pasar contexto para sincronización automática
-                repository.actualizarAnimalByLocalId(_animalActual.value!!.localId, animal, context)
+                // PUT usando ID DEL SERVIDOR
+                repository.actualizarAnimal(
+                    actual.id, // 👈 NO localId
+                    animal,
+                    context
+                )
             }
 
             resultado
@@ -86,14 +92,11 @@ class FormularioAnimalViewModel(
                     _isLoading.value = false
                     _operacionExitosa.emit(true)
                 }
-                .onFailure {
+                .onFailure { e ->
                     _isLoading.value = false
-                    _operacionExitosa.emit(true)
+                    _error.value = e.message ?: "Error al guardar el animal"
                 }
         }
     }
-
-    fun limpiarError() {
-        _error.value = null
-    }
 }
+

@@ -74,11 +74,11 @@ fun FormularioAnimalScreen(
                 pesoActual = animal.peso_actual?.toString() ?: ""  // CAMBIADO: de String directo a toString()
                 estadoSalud = animal.estado_salud
                 notas = animal.notas ?: ""
-
-                madreSeleccionada = animal.madre_id  // CAMBIADO: ahora es Int directamente
-                padreSeleccionado = animal.padre_id  // CAMBIADO: ahora es Int directamente
-
                 datosYaCargados = true
+
+                madreSeleccionada = animal.madre_id
+                padreSeleccionado = animal.padre_id
+
             }
         }
     }

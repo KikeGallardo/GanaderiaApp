@@ -32,7 +32,7 @@ interface GanadoApiService {
     @PUT("api/animales/{id}")
     suspend fun actualizarAnimal(
         @Path("id") id: Int,
-        @Body animal: AnimalRequest
+        @Body request: AnimalRequest
     ): ApiResponse<Animal>
 
     @DELETE("api/animales/{id}")

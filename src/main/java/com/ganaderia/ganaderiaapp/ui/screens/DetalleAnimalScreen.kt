@@ -52,7 +52,9 @@ fun DetalleAnimalScreen(
     var mostrarConfirmarBorrado by remember { mutableStateOf(false) }
 
     LaunchedEffect(localId) {
-        viewModel.cargarAnimal(localId)
+        if (localId > 0) {
+            viewModel.cargarAnimal(localId)
+        }
     }
 
     Scaffold(
@@ -203,10 +205,15 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
 
         item {
             DetalleCard(titulo = "Producción") {
+                // CORRECCIÓN AQUÍ: Convertir String? a Double? antes de formatear
+                val pesoFormateado = animal.peso_actual?.toDoubleOrNull()?.let {
+                    "%.2f kg".format(it)
+                } ?: "--- kg"
+
                 InfoRow(
                     Icons.Default.MonitorWeight,
                     "Peso Actual",
-                    "${animal.peso_actual?.let { "%.2f".format(it) } ?: "---"} kg"  // CAMBIADO: formato de Double
+                    pesoFormateado
                 )
                 InfoRow(Icons.Default.DateRange, "Nacimiento", animal.fecha_nacimiento)
                 InfoRow(Icons.Default.DateRange, "Ingreso", animal.fecha_ingreso)
