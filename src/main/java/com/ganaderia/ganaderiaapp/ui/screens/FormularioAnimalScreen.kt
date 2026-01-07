@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.ganaderia.ganaderiaapp.data.model.AnimalRequest
 import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import com.ganaderia.ganaderiaapp.ui.viewmodel.FormularioAnimalViewModel
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -226,8 +227,13 @@ fun FormularioAnimalScreen(
             item {
                 Button(
                     onClick = {
+                        Log.d("FormularioScreen", "=== BOTÓN GUARDAR PRESIONADO ===")
+                        Log.d("FormularioScreen", "animalId recibido: $animalId")
+                        Log.d("FormularioScreen", "Identificación: $identificacion")
+
                         if (identificacion.isBlank() || fechaNacimiento.isBlank() || fechaIngreso.isBlank()) {
                             mostrarErrores = true
+                            Log.w("FormularioScreen", "Validación fallida: campos vacíos")
                         } else {
                             val request = AnimalRequest(
                                 identificacion = identificacion,
@@ -236,13 +242,14 @@ fun FormularioAnimalScreen(
                                 categoria = categoriaSeleccionada,
                                 fecha_nacimiento = fechaNacimiento,
                                 fecha_ingreso = fechaIngreso,
-                                peso_actual = pesoActual.toDoubleOrNull(),  // CAMBIADO: ahora es Double
+                                peso_actual = pesoActual.toDoubleOrNull(),
                                 estado_salud = estadoSalud,
-                                madre_id = madreSeleccionada,  // CAMBIADO: ahora es Int
-                                padre_id = padreSeleccionado,  // CAMBIADO: ahora es Int
+                                madre_id = madreSeleccionada,
+                                padre_id = padreSeleccionado,
                                 notas = notas.ifBlank { null }
                             )
 
+                            Log.d("FormularioScreen", "Request creado, llamando a viewModel.guardarAnimal()")
                             viewModel.guardarAnimal(request)
                         }
                     },
@@ -260,7 +267,6 @@ fun FormularioAnimalScreen(
                     }
                 }
             }
-
             if (error != null) {
                 item {
                     Surface(

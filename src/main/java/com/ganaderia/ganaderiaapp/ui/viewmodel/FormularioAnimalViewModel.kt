@@ -1,6 +1,7 @@
 package com.ganaderia.ganaderiaapp.ui.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ganaderia.ganaderiaapp.data.model.*
@@ -32,11 +33,13 @@ class FormularioAnimalViewModel(
     val operacionExitosa = _operacionExitosa.asSharedFlow()
 
     init {
+        Log.d("FormularioViewModel", "ViewModel inicializado")
         cargarOpcionesPadres()
     }
 
     fun cargarOpcionesPadres() {
         viewModelScope.launch {
+            Log.d("FormularioViewModel", "Cargando opciones de padres")
             repository.getAnimalesSinFiltros()
                 .onSuccess { lista ->
                     _hembras.value = lista
@@ -46,23 +49,34 @@ class FormularioAnimalViewModel(
                     _machos.value = lista
                         .filter { it.sexo.equals("Macho", ignoreCase = true) }
                         .map { AnimalSimple(it.localId, it.identificacion, it.raza) }
+
+                    Log.d("FormularioViewModel", "Cargadas ${_hembras.value.size} hembras y ${_machos.value.size} machos")
                 }
-                .onFailure {
-                    // Modo offline
+                .onFailure { e ->
+                    Log.e("FormularioViewModel", "Error cargando padres", e)
                 }
         }
     }
 
     fun cargarAnimal(localId: Int) {
         viewModelScope.launch {
+            Log.d("FormularioViewModel", "=== CARGANDO ANIMAL PARA EDITAR ===")
+            Log.d("FormularioViewModel", "LocalId recibido: $localId")
+
             _isLoading.value = true
             repository.getAnimalByLocalId(localId)
-                .onSuccess {
-                    _animalActual.value = it
+                .onSuccess { animal ->
+                    _animalActual.value = animal
                     _error.value = null
+                    Log.d("FormularioViewModel", "Animal cargado exitosamente:")
+                    Log.d("FormularioViewModel", "  - LocalId: ${animal.localId}")
+                    Log.d("FormularioViewModel", "  - ServerId: ${animal.id}")
+                    Log.d("FormularioViewModel", "  - Identificación: ${animal.identificacion}")
+                    Log.d("FormularioViewModel", "  - Sincronizado: ${animal.sincronizado}")
                 }
-                .onFailure {
-                    _error.value = "Error al cargar animal: ${it.message}"
+                .onFailure { e ->
+                    _error.value = "Error al cargar animal: ${e.message}"
+                    Log.e("FormularioViewModel", "Error cargando animal", e)
                 }
             _isLoading.value = false
         }
@@ -70,33 +84,53 @@ class FormularioAnimalViewModel(
 
     fun guardarAnimal(animal: AnimalRequest) {
         viewModelScope.launch {
+            Log.d("FormularioViewModel", "=== GUARDAR ANIMAL INICIADO ===")
+
             _isLoading.value = true
             _error.value = null
 
             val actual = _animalActual.value
 
+            Log.d("FormularioViewModel", "Animal actual: ${if (actual == null) "null (CREAR NUEVO)" else "existe (EDITAR)"}")
+
+            if (actual != null) {
+                Log.d("FormularioViewModel", "Modo EDICIÓN:")
+                Log.d("FormularioViewModel", "  - LocalId: ${actual.localId}")
+                Log.d("FormularioViewModel", "  - ServerId: ${actual.id}")
+                Log.d("FormularioViewModel", "  - Identificación: ${actual.identificacion}")
+            }
+
+            Log.d("FormularioViewModel", "Datos a guardar:")
+            Log.d("FormularioViewModel", "  - Identificación: ${animal.identificacion}")
+            Log.d("FormularioViewModel", "  - Raza: ${animal.raza}")
+            Log.d("FormularioViewModel", "  - Peso: ${animal.peso_actual}")
+
             val resultado = if (actual == null) {
-                // POST
+                Log.d("FormularioViewModel", "Ejecutando registrarAnimal()")
                 repository.registrarAnimal(animal, context)
             } else {
-                // PUT usando ID DEL SERVIDOR
+                Log.d("FormularioViewModel", "Ejecutando actualizarAnimal() con localId=${actual.localId}")
                 repository.actualizarAnimal(
-                    actual.id, // 👈 NO localId
+                    actual.localId,
                     animal,
                     context
                 )
             }
 
             resultado
-                .onSuccess {
+                .onSuccess { animalGuardado ->
                     _isLoading.value = false
+                    Log.d("FormularioViewModel", "✅ GUARDADO EXITOSO")
+                    Log.d("FormularioViewModel", "Animal guardado - LocalId: ${animalGuardado.localId}, ID: ${animalGuardado.id}")
                     _operacionExitosa.emit(true)
                 }
                 .onFailure { e ->
                     _isLoading.value = false
                     _error.value = e.message ?: "Error al guardar el animal"
+                    Log.e("FormularioViewModel", "❌ ERROR AL GUARDAR: ${e.message}", e)
                 }
+
+            Log.d("FormularioViewModel", "=== FIN GUARDAR ANIMAL ===")
         }
     }
 }
-
