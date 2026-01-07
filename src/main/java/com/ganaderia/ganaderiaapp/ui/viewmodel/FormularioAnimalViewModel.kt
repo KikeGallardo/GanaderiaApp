@@ -51,6 +51,10 @@ class FormularioAnimalViewModel(
         }
     }
 
+    fun limpiarError() {
+        _error.value = null
+    }
+
     fun cargarAnimal(localId: Int) {
         viewModelScope.launch {
             _isLoading.value = true

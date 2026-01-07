@@ -17,7 +17,8 @@ interface AnimalDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertarAnimal(animal: AnimalEntity): Long
 
-    @Query("SELECT * FROM animales WHERE (sincronizado = 0 OR sincronizado = 'false') AND activo = 1")
+    // 🔧 FIX: Query corregido para campo booleano
+    @Query("SELECT * FROM animales WHERE sincronizado = 0 AND activo = 1")
     suspend fun getNoSincronizados(): List<AnimalEntity>
 
     @Query("UPDATE animales SET madre_identificacion = :madre, padre_identificacion = :padre WHERE localId = :localId")
@@ -35,7 +36,7 @@ interface AnimalDao {
     @Query("SELECT * FROM animales WHERE identificacion = :identificacion AND activo = 1 LIMIT 1")
     suspend fun getAnimalByIdentificacion(identificacion: String): AnimalEntity?
 
-    // 🔧 CORRECCIÓN: estado ahora es Boolean pero sincronizado en BD es Int
+    // 🔧 FIX: Query corregido para manejar Boolean correctamente
     @Query("""
         SELECT * FROM animales 
         WHERE sincronizado = CASE WHEN :estado THEN 1 ELSE 0 END
@@ -43,8 +44,13 @@ interface AnimalDao {
     """)
     suspend fun getAnimalesPorEstadoSincronizacion(estado: Boolean): List<AnimalEntity>
 
-    @Query("UPDATE animales SET sincronizado = 1 WHERE id = :id")
-    suspend fun marcarSincronizado(id: Int)
+    // 🔧 FIX: Marcar por localId en lugar de serverId
+    @Query("UPDATE animales SET sincronizado = 1 WHERE localId = :localId")
+    suspend fun marcarSincronizadoPorLocalId(localId: Int)
+
+    // 🔧 NUEVO: Marcar por serverId (para casos específicos)
+    @Query("UPDATE animales SET sincronizado = 1 WHERE id = :serverId")
+    suspend fun marcarSincronizadoPorServerId(serverId: Int)
 
     @Query("UPDATE animales SET activo = 0 WHERE id = :id")
     suspend fun eliminarAnimalPorId(id: Int)
@@ -55,8 +61,12 @@ interface AnimalDao {
     @Query("SELECT COUNT(*) FROM animales WHERE activo = 1")
     suspend fun getCountAnimalesActivos(): Int
 
-    // 🔧 Query de debug
-    @Query("SELECT localId, id, identificacion, sincronizado, activo FROM animales")
+    // 🔧 NUEVO: Contar pendientes de sincronización
+    @Query("SELECT COUNT(*) FROM animales WHERE sincronizado = 0 AND activo = 1")
+    suspend fun getCountNoSincronizados(): Int
+
+    // 🔧 Query de debug mejorado
+    @Query("SELECT localId, id, identificacion, sincronizado, activo FROM animales ORDER BY localId DESC")
     suspend fun getAllAnimalesDebug(): List<AnimalDebugInfo>
 }
 
@@ -65,6 +75,6 @@ data class AnimalDebugInfo(
     val localId: Int,
     val id: Int?,
     val identificacion: String,
-    val sincronizado: Int,  // 🔧 CAMBIADO a Int
+    val sincronizado: Int,
     val activo: Int
 )

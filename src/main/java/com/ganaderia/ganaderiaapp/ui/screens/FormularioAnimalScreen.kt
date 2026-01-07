@@ -1,5 +1,6 @@
 package com.ganaderia.ganaderiaapp.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,12 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ganaderia.ganaderiaapp.data.model.AnimalRequest
 import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import com.ganaderia.ganaderiaapp.ui.viewmodel.FormularioAnimalViewModel
-import android.util.Log
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,6 +26,7 @@ fun FormularioAnimalScreen(
     onNavigateBack: () -> Unit,
     viewModel: FormularioAnimalViewModel
 ) {
+    val context = LocalContext.current
     val hembras by viewModel.hembras.collectAsState()
     val machos by viewModel.machos.collectAsState()
     val animalActual by viewModel.animalActual.collectAsState()
@@ -38,11 +40,8 @@ fun FormularioAnimalScreen(
     var fechaNacimiento by remember { mutableStateOf("") }
     var pesoActual by remember { mutableStateOf("") }
     var estadoSalud by remember { mutableStateOf("Bueno") }
-
-    // 🔧 CORREGIDO: Ahora son Strings
     var madreSeleccionada by remember { mutableStateOf<String?>(null) }
     var padreSeleccionado by remember { mutableStateOf<String?>(null) }
-
     var notas by remember { mutableStateOf("") }
 
     var showDatePickerNac by remember { mutableStateOf(false) }
@@ -58,11 +57,17 @@ fun FormularioAnimalScreen(
         }
     }
 
+    LaunchedEffect(error) {
+        error?.let {
+            if (it.contains("ya existe") || it.contains("Duplicate")) {
+                Toast.makeText(context, "Esa identificación ya está registrada", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     LaunchedEffect(animalId) {
         viewModel.cargarOpcionesPadres()
-        if (animalId != null) {
-            viewModel.cargarAnimal(animalId)
-        }
+        if (animalId != null) viewModel.cargarAnimal(animalId)
     }
 
     LaunchedEffect(animalActual) {
@@ -76,11 +81,8 @@ fun FormularioAnimalScreen(
                 pesoActual = animal.peso_actual?.toString() ?: ""
                 estadoSalud = animal.estado_salud
                 notas = animal.notas ?: ""
-
-                // 🔧 CORREGIDO: Asignar identificaciones de texto
                 madreSeleccionada = animal.madre_identificacion
                 padreSeleccionado = animal.padre_identificacion
-
                 datosYaCargados = true
             }
         }
@@ -105,26 +107,26 @@ fun FormularioAnimalScreen(
             item {
                 OutlinedTextField(
                     value = identificacion,
-                    onValueChange = { identificacion = it },
+                    onValueChange = {
+                        identificacion = it
+                        if (error != null) viewModel.limpiarError()
+                    },
                     label = { Text("Identificación *") },
                     modifier = Modifier.fillMaxWidth(),
-                    isError = mostrarErrores && identificacion.isEmpty(),
+                    isError = (mostrarErrores && identificacion.isEmpty()) || error != null,
                     shape = RoundedCornerShape(12.dp),
                     supportingText = {
                         if (mostrarErrores && identificacion.isEmpty()) {
                             Text("Campo obligatorio", color = GanadoColors.Error)
+                        } else if (error != null && (error!!.contains("ya existe") || error!!.contains("Duplicate"))) {
+                            Text(error!!, color = GanadoColors.Error)
                         }
                     }
                 )
             }
 
             item {
-                SelectorDropdown(
-                    label = "Raza *",
-                    opciones = razas,
-                    seleccionado = razaSeleccionada,
-                    onSeleccion = { razaSeleccionada = it }
-                )
+                SelectorDropdown("Raza *", razas, razaSeleccionada) { razaSeleccionada = it }
             }
 
             item {
@@ -144,12 +146,7 @@ fun FormularioAnimalScreen(
             }
 
             item {
-                SelectorDropdown(
-                    label = "Categoría *",
-                    opciones = categorias,
-                    seleccionado = categoriaSeleccionada,
-                    onSeleccion = { categoriaSeleccionada = it }
-                )
+                SelectorDropdown("Categoría *", categorias, categoriaSeleccionada) { categoriaSeleccionada = it }
             }
 
             item {
@@ -172,41 +169,20 @@ fun FormularioAnimalScreen(
                     modifier = Modifier.fillMaxWidth(),
                     isError = mostrarErrores && pesoActual.isEmpty(),
                     shape = RoundedCornerShape(12.dp),
-                    leadingIcon = { Icon(Icons.Default.MonitorWeight, null) },
-                    supportingText = {
-                        if (mostrarErrores && pesoActual.isEmpty()) {
-                            Text("El peso es obligatorio", color = GanadoColors.Error)
-                        }
-                    }
+                    leadingIcon = { Icon(Icons.Default.MonitorWeight, null) }
                 )
             }
 
             item {
-                SelectorDropdown(
-                    label = "Estado de Salud *",
-                    opciones = listOf("Excelente", "Bueno", "Regular", "En Tratamiento"),
-                    seleccionado = estadoSalud,
-                    onSeleccion = { estadoSalud = it }
-                )
-            }
-
-            // 🔧 CORREGIDO: Ahora usa las listas de Strings
-            item {
-                SelectorPadres(
-                    label = "Madre",
-                    opciones = hembras,
-                    seleccionado = madreSeleccionada,
-                    onSeleccion = { madreSeleccionada = it }
-                )
+                SelectorDropdown("Estado de Salud *", listOf("Excelente", "Bueno", "Regular", "En Tratamiento"), estadoSalud) { estadoSalud = it }
             }
 
             item {
-                SelectorPadres(
-                    label = "Padre",
-                    opciones = machos,
-                    seleccionado = padreSeleccionado,
-                    onSeleccion = { padreSeleccionado = it }
-                )
+                SelectorPadres("Madre", hembras, madreSeleccionada) { madreSeleccionada = it }
+            }
+
+            item {
+                SelectorPadres("Padre", machos, padreSeleccionado) { padreSeleccionado = it }
             }
 
             item {
@@ -235,7 +211,6 @@ fun FormularioAnimalScreen(
                                 fecha_ingreso = LocalDate.now().toString(),
                                 peso_actual = pesoActual.toDoubleOrNull(),
                                 estado_salud = estadoSalud,
-                                // 🔧 CORREGIDO: Enviamos strings
                                 madre_identificacion = madreSeleccionada,
                                 padre_identificacion = padreSeleccionado,
                                 notas = notas.ifBlank { null }
@@ -257,7 +232,6 @@ fun FormularioAnimalScreen(
                     }
                 }
             }
-            // ... resto del código de error ...
         }
     }
 
@@ -284,21 +258,13 @@ fun SelectorDropdown(label: String, opciones: List<String>, seleccionado: String
     }
 }
 
-// 🔧 COMPONENTE ACTUALIZADO PARA STRINGS
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SelectorPadres(
-    label: String,
-    opciones: List<String>,
-    seleccionado: String?,
-    onSeleccion: (String?) -> Unit
-) {
+fun SelectorPadres(label: String, opciones: List<String>, seleccionado: String?, onSeleccion: (String?) -> Unit) {
     var expandido by remember { mutableStateOf(false) }
-    val textoMostrar = seleccionado ?: "Ninguno"
-
     ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = it }) {
         OutlinedTextField(
-            value = textoMostrar,
+            value = seleccionado ?: "Ninguno",
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -307,16 +273,8 @@ fun SelectorPadres(
             shape = RoundedCornerShape(12.dp)
         )
         ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
-            DropdownMenuItem(
-                text = { Text("Ninguno") },
-                onClick = { onSeleccion(null); expandido = false }
-            )
-            opciones.forEach { nombre ->
-                DropdownMenuItem(
-                    text = { Text(nombre) },
-                    onClick = { onSeleccion(nombre); expandido = false }
-                )
-            }
+            DropdownMenuItem(text = { Text("Ninguno") }, onClick = { onSeleccion(null); expandido = false })
+            opciones.forEach { nombre -> DropdownMenuItem(text = { Text(nombre) }, onClick = { onSeleccion(nombre); expandido = false }) }
         }
     }
 }
