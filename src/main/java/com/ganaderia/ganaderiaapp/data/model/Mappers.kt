@@ -38,14 +38,19 @@ fun Animal.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntity {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toDoubleOrNull(),
+        peso_actual = this.peso_actual?.toDoubleOrNull(), // String? -> Double?
         estado_salud = this.estado_salud,
         notas = this.notas,
         edad_meses = this.edad_meses,
+<<<<<<< HEAD
         madre_id = this.madre_id,
         padre_id = this.padre_id,
         madre_identificacion = this.madre_identificacion,
         padre_identificacion = this.padre_identificacion,
+=======
+        madre_id = null, // Ajustar según lógica de negocio si es necesario
+        padre_id = null,
+>>>>>>> parent of 4eebf21 (Final con detalles)
         sincronizado = sincronizado,
         activo = 1
     )
@@ -71,11 +76,15 @@ fun AnimalEntity.toModel(): Animal {
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual?.toString(),
+        peso_actual = this.peso_actual?.toString(), // Double? -> String?
         estado_salud = this.estado_salud,
         notas = this.notas,
+<<<<<<< HEAD
         madre_identificacion = this.madre_identificacion,
         padre_identificacion = this.padre_identificacion,
+=======
+        madre_identificacion = null, // Estos campos no existen en AnimalEntity actualmente
+>>>>>>> parent of 4eebf21 (Final con detalles)
         madre_raza = null,
         padre_raza = null,
         edad_meses = edadCalculada, // Se usa el valor calculado
@@ -97,9 +106,15 @@ fun AnimalEntity.toRequest(): AnimalRequest {
         fecha_ingreso = this.fecha_ingreso,
         peso_actual = this.peso_actual,
         estado_salud = this.estado_salud,
+<<<<<<< HEAD
         madre_identificacion = this.madre_identificacion,
         padre_identificacion = this.padre_identificacion,
         notas = this.notas ?: ""
+=======
+        madre_id = this.madre_id,
+        padre_id = this.padre_id,
+        notas = this.notas ?: "" // Enviar string vacío en lugar de null si da problemas
+>>>>>>> parent of 4eebf21 (Final con detalles)
     )
 }
 
@@ -114,12 +129,19 @@ fun AnimalRequest.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntit
         categoria = this.categoria,
         fecha_nacimiento = this.fecha_nacimiento,
         fecha_ingreso = this.fecha_ingreso,
-        peso_actual = this.peso_actual,
+        peso_actual = this.peso_actual, // Ya es Double? en el Request
         estado_salud = this.estado_salud,
         notas = this.notas,
+<<<<<<< HEAD
         madre_identificacion = this.madre_identificacion,
         padre_identificacion = this.padre_identificacion,
         sincronizado = sincronizado,
+=======
+        sincronizado = sincronizado,
+        edad_meses = 0,
+        madre_id = this.madre_id,
+        padre_id = this.padre_id,
+>>>>>>> parent of 4eebf21 (Final con detalles)
         activo = 1
     )
 }
@@ -129,8 +151,8 @@ fun AnimalRequest.toEntity(sincronizado: Boolean, localId: Int = 0): AnimalEntit
  */
 fun VacunaRequest.toEntity(sincronizado: Boolean = false): VacunaEntity {
     return VacunaEntity(
-        localId = 0,
-        id = null,
+        localId = 0, // Generado automáticamente por Room
+        id = null,   // Se llenará cuando la API responda
         animal_id = this.animal_id,
         nombre_vacuna = this.nombre_vacuna,
         fecha_aplicacion = this.fecha_aplicacion,
@@ -158,7 +180,7 @@ fun KPIsEntity.toDomain(): KPIs {
 
 fun KPIs.toEntity(): KPIsEntity {
     return KPIsEntity(
-        id = 1,
+        id = 1, // ID único para mantener siempre una sola fila de caché
         total_animales = this.total_animales,
         peso_promedio = this.peso_promedio ?: "0",
         total_hembras = this.total_hembras ?: "0",

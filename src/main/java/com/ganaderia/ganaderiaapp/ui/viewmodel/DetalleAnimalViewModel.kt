@@ -36,6 +36,7 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
                 _animal.value = animal
                 Log.d("DEBUG_PADRES", "Local - Madre: ${animal.madre_identificacion}, Padre: ${animal.padre_identificacion}")
 
+<<<<<<< HEAD
                 if (animal.id > 0 && animal.sincronizado) {
                     viewModelScope.launch {
                         repository.refrescarNombresPadres(animal.localId, animal.id)
@@ -43,6 +44,25 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
                             _animal.value = actualizado
                             Log.d("DEBUG_PADRES", "Post-Refresco - Madre: ${actualizado.madre_identificacion}")
                         }
+=======
+            Log.d("DetalleViewModel", "Cargando animal con localId: $localId")
+
+            repository.getAnimalByLocalId(localId)
+                .onSuccess { animal ->
+                    _animal.value = animal
+                    Log.d("DetalleViewModel", "Animal cargado: ${animal.identificacion}, sincronizado: ${animal.sincronizado}")
+
+                    if (animal.id > 0) {
+                        cargarVacunas(animal.id)
+                    }
+
+                    cargarCatalogo()
+                }
+                .onFailure { e ->
+                    if (_animal.value == null) {
+                        _error.value = "Error al cargar animal: ${e.message}"
+                        Log.e("DetalleViewModel", "Error cargando animal", e)
+>>>>>>> parent of 4eebf21 (Final con detalles)
                     }
                 }
             }
@@ -56,10 +76,10 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.getVacunas(animalId)
                 .onSuccess {
                     _vacunas.value = it
-                    Log.d("DetalleViewModel", "✅ Cargadas ${it.size} vacunas")
+                    Log.d("DetalleViewModel", "Cargadas ${it.size} vacunas")
                 }
                 .onFailure {
-                    Log.e("DetalleViewModel", "❌ Error cargando vacunas", it)
+                    Log.e("DetalleViewModel", "Error cargando vacunas", it)
                 }
         }
     }
@@ -83,7 +103,7 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.guardarEnCatalogo(nombre)
                 .onSuccess {
                     cargarCatalogo()
-                    Log.d("DetalleViewModel", "✅ Nueva vacuna agregada: $nombre")
+                    Log.d("DetalleViewModel", "Nueva vacuna agregada al catálogo: $nombre")
                 }
         }
     }
@@ -97,13 +117,13 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.eliminarAnimalByLocalId(localId)
                 .onSuccess {
                     _isLoading.value = false
-                    Log.d("DetalleViewModel", "✅ Animal eliminado exitosamente")
+                    Log.d("DetalleViewModel", "Animal eliminado exitosamente")
                     onSuccess()
                 }
                 .onFailure {
                     _error.value = "Error al eliminar: ${it.message}"
                     _isLoading.value = false
-                    Log.e("DetalleViewModel", "❌ Error eliminando animal", it)
+                    Log.e("DetalleViewModel", "Error eliminando animal", it)
                 }
         }
     }
@@ -117,11 +137,11 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.eliminarVacuna(vacunaId)
                 .onSuccess {
                     cargarVacunas(animalId)
-                    Log.d("DetalleViewModel", "✅ Vacuna eliminada exitosamente")
+                    Log.d("DetalleViewModel", "Vacuna eliminada exitosamente")
                 }
                 .onFailure {
                     _error.value = "No se pudo eliminar: ${it.message}"
-                    Log.e("DetalleViewModel", "❌ Error eliminando vacuna", it)
+                    Log.e("DetalleViewModel", "Error eliminando vacuna", it)
                 }
 
             _isLoading.value = false
@@ -135,12 +155,12 @@ class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewMod
             repository.registrarVacuna(vacuna)
                 .onSuccess {
                     cargarVacunas(vacuna.animal_id)
-                    Log.d("DetalleViewModel", "✅ Vacuna registrada exitosamente")
+                    Log.d("DetalleViewModel", "Vacuna registrada exitosamente")
                     onSuccess()
                 }
                 .onFailure {
                     cargarVacunas(vacuna.animal_id)
-                    Log.e("DetalleViewModel", "❌ Error registrando vacuna", it)
+                    Log.e("DetalleViewModel", "Error registrando vacuna", it)
                     onSuccess()
                 }
         }

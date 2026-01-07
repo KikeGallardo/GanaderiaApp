@@ -1,6 +1,3 @@
-// ============================================
-// InventarioScreen.kt - Sincronización automática
-// ============================================
 package com.ganaderia.ganaderiaapp.ui.screens
 
 import androidx.compose.foundation.clickable
@@ -41,6 +38,7 @@ fun InventarioScreen(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val error by viewModel.error.collectAsState()
 
+<<<<<<< HEAD
     // Estado para la barra de búsqueda
     var searchQuery by remember { mutableStateOf("") }
 
@@ -55,6 +53,10 @@ fun InventarioScreen(
         }
     }
 
+=======
+    // Contar animales sincronizados y no sincronizados
+    val animalesSincronizados = animales.count { it.sincronizado }
+>>>>>>> parent of 4eebf21 (Final con detalles)
     val animalesNoSincronizados = animales.count { !it.sincronizado }
 
     Scaffold(
@@ -65,13 +67,7 @@ fun InventarioScreen(
                         Text("Inventario de Ganado", fontWeight = FontWeight.Bold)
                         if (animalesNoSincronizados > 0) {
                             Text(
-                                "$animalesNoSincronizados pendientes (auto-sync)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.8f)
-                            )
-                        } else if (isSyncing) {
-                            Text(
-                                "Sincronizando...",
+                                "$animalesNoSincronizados pendientes de sincronizar",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.8f)
                             )
@@ -80,10 +76,11 @@ fun InventarioScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Atrás", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
                 },
                 actions = {
+<<<<<<< HEAD
                     if (isSyncing) {
                         CircularProgressIndicator(
                             modifier = Modifier
@@ -92,6 +89,24 @@ fun InventarioScreen(
                             color = Color.White,
                             strokeWidth = 2.dp
                         )
+=======
+                    // Botón para forzar sincronización
+                    if (animalesNoSincronizados > 0) {
+                        IconButton(
+                            onClick = { viewModel.forzarSincronizacion(context) },
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.CloudUpload, "Sincronizar pendientes", tint = Color.White)
+                            }
+                        }
+>>>>>>> parent of 4eebf21 (Final con detalles)
                     }
                     IconButton(onClick = { viewModel.refrescar() }) {
                         Icon(Icons.Default.Refresh, "Actualizar", tint = Color.White)
@@ -117,6 +132,7 @@ fun InventarioScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+<<<<<<< HEAD
 
             // BARRA DE BÚSQUEDA
             OutlinedTextField(
@@ -171,6 +187,36 @@ fun InventarioScreen(
                 }
             }
 
+=======
+            if (isLoading || isSyncing) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = if (isSyncing) Color(0xFFFF9800) else GanadoColors.Primary
+                )
+            }
+
+            if (error != null && animales.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Sin conexión - Mostrando datos locales",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+>>>>>>> parent of 4eebf21 (Final con detalles)
             when {
                 error != null && animales.isEmpty() -> {
                     ErrorScreen(error!!) { viewModel.refrescar() }
@@ -202,6 +248,8 @@ fun InventarioScreen(
         }
     }
 }
+
+// Reemplazar solo la función AnimalCard en InventarioScreen.kt
 
 @Composable
 fun AnimalCard(
@@ -242,7 +290,7 @@ fun AnimalCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudQueue,
+                        imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudOff,
                         contentDescription = if (animal.sincronizado) "Sincronizado" else "Pendiente",
                         tint = if (animal.sincronizado) GanadoColors.Success else Color(0xFFFF9800),
                         modifier = Modifier.size(20.dp)
@@ -280,6 +328,7 @@ fun AnimalCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // CORRECCIÓN AQUÍ: Convertir String? a Double? antes de formatear
                 val pesoFormateado = animal.peso_actual?.toDoubleOrNull()?.let {
                     "%.2f kg".format(it)
                 } ?: "--- kg"

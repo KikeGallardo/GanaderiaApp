@@ -35,7 +35,9 @@ class SyncWorker(
                 try {
                     val request = animalLocal.toRequest()
 
+                    // Si tiene ID del servidor, actualizar; si no, crear nuevo
                     if (animalLocal.id != null && animalLocal.id > 0) {
+<<<<<<< HEAD
                         // CASO: EDICIÓN PENDIENTE
                         Log.d("SyncWorker", "Actualizando animal ${animalLocal.identificacion} (serverId: ${animalLocal.id})")
 
@@ -76,16 +78,40 @@ class SyncWorker(
                                 Log.e("SyncWorker", "❌ El servidor no devolvió un ID válido")
                             }
                         } else {
+=======
+                        Log.d("SyncWorker", "Actualizando animal: ${animalLocal.identificacion} (ID: ${animalLocal.id})")
+                        val resultado = repository.actualizarAnimalLocal(
+                            animalLocal.copy(sincronizado = true)
+                        )
+                        exitosos++
+                    } else {
+                        Log.d("SyncWorker", "Creando nuevo animal: ${animalLocal.identificacion}")
+                        val resultado = repository.registrarAnimalApiDirecto(request)
+
+                        resultado.onSuccess { animalServidor ->
+                            // Actualizar el registro local con el ID del servidor
+                            val entidadActualizada = animalLocal.copy(
+                                id = animalServidor.id,
+                                sincronizado = true
+                            )
+                            repository.actualizarAnimalLocal(entidadActualizada)
+                            Log.d("SyncWorker", "✓ Animal ${animalLocal.identificacion} sincronizado con ID ${animalServidor.id}")
+                            exitosos++
+                        }.onFailure { error ->
+                            Log.e("SyncWorker", "✗ Error sincronizando ${animalLocal.identificacion}: ${error.message}")
+>>>>>>> parent of 4eebf21 (Final con detalles)
                             fallidos++
                             Log.e("SyncWorker", "❌ Error creando ${animalLocal.identificacion}")
                         }
                     }
                 } catch (e: Exception) {
+                    Log.e("SyncWorker", "✗ Excepción sincronizando ${animalLocal.identificacion}", e)
                     fallidos++
                     Log.e("SyncWorker", "❌ Excepción procesando ${animalLocal.identificacion}", e)
                 }
             }
 
+<<<<<<< HEAD
             try {
                 repository.sincronizarKPIs()
                 Log.d("SyncWorker", "✅ KPIs sincronizados")
@@ -98,6 +124,17 @@ class SyncWorker(
             when {
                 fallidos > 0 && exitosos == 0 -> Result.retry()
                 else -> Result.success()
+=======
+            // Sincronizar KPIs al final
+            repository.sincronizarKPIs()
+
+            Log.d("SyncWorker", "=== SINCRONIZACIÓN COMPLETADA: $exitosos exitosos, $fallidos fallidos ===")
+
+            if (fallidos > 0 && exitosos == 0) {
+                Result.retry() // Reintentar si todos fallaron
+            } else {
+                Result.success()
+>>>>>>> parent of 4eebf21 (Final con detalles)
             }
         } catch (e: Exception) {
             Log.e("SyncWorker", "❌ Error general en sincronización", e)

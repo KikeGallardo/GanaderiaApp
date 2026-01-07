@@ -177,7 +177,7 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                if (!animal.sincronizado){
+                if (!animal.sincronizado) {
                     Icon(
                         imageVector = Icons.Default.CloudOff,
                         contentDescription = "No sincronizado",
