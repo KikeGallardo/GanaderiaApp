@@ -5,9 +5,8 @@ import retrofit2.http.*
 
 interface GanadoApiService {
 
-    // En tu interface ApiService
     @GET("api/kpis")
-    suspend fun getKPIs(): KPIs // Devuelve KPIs directamente, no ApiResponse<KPIs>
+    suspend fun getKPIs(): KPIs // Quitamos el ApiResponse
 
     @GET("api/animales")
     suspend fun getAnimales(
@@ -26,14 +25,15 @@ interface GanadoApiService {
     @GET("api/animales/machos")
     suspend fun getMachos(): ApiResponse<List<AnimalSimple>>
 
+    // --- CAMBIO AQUÍ: Nombre sincronizado con el Repositorio ---
     @POST("api/animales")
-    suspend fun crearAnimal(@Body animal: AnimalRequest): ApiResponse<Any>
+    suspend fun registrarAnimal(@Body animal: AnimalRequest): ApiResponse<Animal>
 
     @PUT("api/animales/{id}")
     suspend fun actualizarAnimal(
         @Path("id") id: Int,
         @Body animal: AnimalRequest
-    ): ApiResponse<Any>
+    ): ApiResponse<Animal>
 
     @DELETE("api/animales/{id}")
     suspend fun eliminarAnimal(@Path("id") id: Int): ApiResponse<Any>
@@ -48,7 +48,9 @@ interface GanadoApiService {
     suspend fun eliminarVacuna(@Path("id") id: Int): ApiResponse<Any>
 
     @GET("api/catalogo-vacunas")
-    suspend fun getCatalogoVacunas(): retrofit2.Response<ApiResponse<List<String>>>
+    suspend fun getCatalogo(): ApiResponse<List<String>>
+
     @POST("api/catalogo-vacunas")
-    suspend fun guardarEnCatalogo(@Body body: Map<String, String>): retrofit2.Response<Unit>
+    suspend fun guardarCatalogo(@Body body: Map<String, String>): ApiResponse<Any>
+
 }

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Archivo: app/src/main/AndroidManifest.xml -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:name=".GanaderiaApp"  android:allowBackup="true">
 
     <!-- Permisos necesarios para conectarse a la API -->
     <uses-permission android:name="android.permission.INTERNET" />

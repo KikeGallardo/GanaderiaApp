@@ -2,7 +2,6 @@ package com.ganaderia.ganaderiaapp.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,7 +22,7 @@ import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 @Composable
 fun KPICard(
     titulo: String,
-    valor: String,
+    valor: String?, // Es opcional
     subtitulo: String? = null,
     color: Color,
     modifier: Modifier = Modifier
@@ -43,17 +42,20 @@ fun KPICard(
                 color = GanadoColors.TextSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
+
+            // CORRECCIÓN: Si 'valor' es null, ponemos "0"
             Text(
-                text = valor,
+                text = valor ?: "0",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold
                 ),
                 color = color
             )
+
             if (subtitulo != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = subtitulo,
+                    text = subtitulo, // Aquí ya sabemos que no es null por el if
                     style = MaterialTheme.typography.bodySmall,
                     color = GanadoColors.TextSecondary
                 )

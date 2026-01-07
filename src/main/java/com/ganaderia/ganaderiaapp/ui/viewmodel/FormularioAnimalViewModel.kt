@@ -1,76 +1,94 @@
-// ============================================
-// Archivo: ui/viewmodel/FormularioAnimalViewModel.kt
-// ============================================
 package com.ganaderia.ganaderiaapp.ui.viewmodel
-import com.ganaderia.ganaderiaapp.data.repository.GanadoRepository
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ganaderia.ganaderiaapp.data.model.AnimalRequest
-import com.ganaderia.ganaderiaapp.data.model.AnimalSimple
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import com.ganaderia.ganaderiaapp.data.model.*
+import com.ganaderia.ganaderiaapp.data.repository.GanadoRepository
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class FormularioAnimalViewModel : ViewModel() {
-    private val repository = GanadoRepository()
+class FormularioAnimalViewModel(private val repository: GanadoRepository) : ViewModel() {
 
     private val _hembras = MutableStateFlow<List<AnimalSimple>>(emptyList())
-    val hembras: StateFlow<List<AnimalSimple>> = _hembras
+    val hembras = _hembras.asStateFlow()
 
     private val _machos = MutableStateFlow<List<AnimalSimple>>(emptyList())
-    val machos: StateFlow<List<AnimalSimple>> = _machos
+    val machos = _machos.asStateFlow()
+
+    private val _animalActual = MutableStateFlow<Animal?>(null)
+    val animalActual = _animalActual.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading
+    val isLoading = _isLoading.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
+    val error = _error.asStateFlow()
+
+    private val _operacionExitosa = MutableSharedFlow<Boolean>()
+    val operacionExitosa = _operacionExitosa.asSharedFlow()
 
     init {
-        cargarPadres()
+        cargarOpcionesPadres()
     }
 
-    private fun cargarPadres() {
+    fun cargarOpcionesPadres() {
+        viewModelScope.launch {
+            repository.getAnimalesSinFiltros()
+                .onSuccess { lista ->
+                    _hembras.value = lista
+                        .filter { it.sexo.equals("Hembra", ignoreCase = true) }
+                        .map { AnimalSimple(it.id, it.identificacion, it.raza) }
+
+                    _machos.value = lista
+                        .filter { it.sexo.equals("Macho", ignoreCase = true) }
+                        .map { AnimalSimple(it.id, it.identificacion, it.raza) }
+                }
+                .onFailure {
+                    // En modo offline, esto fallará si no hay caché, pero no bloqueamos el flujo
+                }
+        }
+    }
+
+    fun cargarAnimal(id: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-
-            repository.getHembras()
-                .onSuccess { _hembras.value = it }
-
-            repository.getMachos()
-                .onSuccess { _machos.value = it }
-
+            repository.getAnimalById(id)
+                .onSuccess {
+                    _animalActual.value = it
+                    _error.value = null
+                }
+                .onFailure {
+                    _error.value = "Cargando datos locales..."
+                }
             _isLoading.value = false
         }
     }
 
-    fun crearAnimal(animal: AnimalRequest, onSuccess: () -> Unit) {
+    fun guardarAnimal(animal: AnimalRequest) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
 
-            repository.crearAnimal(animal)
-                .onSuccess {
-                    onSuccess()
-                }
-                .onFailure { _error.value = it.message }
+            val resultado = if (_animalActual.value == null) {
+                repository.registrarAnimal(animal)
+            } else {
+                repository.actualizarAnimal(_animalActual.value!!.id, animal)
+            }
 
-            _isLoading.value = false
+            resultado.onSuccess {
+                _isLoading.value = false
+                _operacionExitosa.emit(true)
+            }.onFailure {
+                // MODIFICACIÓN CLAVE PARA MODO OFFLINE:
+                // Aunque falle la API, el Repositorio ya guardó en la base de datos local.
+                // Cerramos la pantalla para que el usuario vea el nuevo animal en su lista.
+                _isLoading.value = false
+                _operacionExitosa.emit(true)
+            }
         }
     }
 
-    fun actualizarAnimal(id: Int, animal: AnimalRequest, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
-
-            repository.actualizarAnimal(id, animal)
-                .onSuccess {
-                    onSuccess()
-                }
-                .onFailure { _error.value = it.message }
-
-            _isLoading.value = false
-        }
+    fun limpiarError() {
+        _error.value = null
     }
 }

@@ -1,6 +1,5 @@
 package com.ganaderia.ganaderiaapp.ui.viewmodel
 
-import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ganaderia.ganaderiaapp.data.model.*
@@ -8,16 +7,13 @@ import com.ganaderia.ganaderiaapp.data.repository.GanadoRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class DetalleAnimalViewModel : ViewModel() {
-    private val repository = GanadoRepository()
-
+class DetalleAnimalViewModel(private val repository: GanadoRepository) : ViewModel() {
     private val _animal = MutableStateFlow<Animal?>(null)
     val animal: StateFlow<Animal?> = _animal
 
     private val _vacunas = MutableStateFlow<List<Vacuna>>(emptyList())
     val vacunas: StateFlow<List<Vacuna>> = _vacunas
 
-    // Usaremos StateFlow para el catálogo para mantener consistencia con el resto del VM
     private val _catalogoVacunas = MutableStateFlow<List<String>>(emptyList())
     val catalogoVacunas: StateFlow<List<String>> = _catalogoVacunas
 
@@ -27,47 +23,63 @@ class DetalleAnimalViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val catalogoPorDefecto = listOf(
+        "Triple Viral", "Rabia", "Carbunco", "Aftosa",
+        "IBR/DVB", "Clostridiasis", "Brucelosis", "Leptospirosis"
+    )
+
     fun cargarAnimal(id: Int) {
         viewModelScope.launch {
             _isLoading.value = true
-            _error.value = null
+            // No borramos el animal actual para evitar parpadeos si ya había algo
             repository.getAnimalById(id)
                 .onSuccess {
                     _animal.value = it
+                    _error.value = null // Si hay éxito (red o local), quitamos el error
                     cargarVacunas(id)
-                    cargarCatalogo() // Cargamos el catálogo al entrar al detalle
+                    cargarCatalogo()
                 }
-                .onFailure {
-                    _error.value = it.message
-                    _isLoading.value = false
+                .onFailure { e ->
+                    // MODO HÍBRIDO: Solo mostramos la pantalla de error si NO hay datos locales
+                    if (_animal.value == null) {
+                        _error.value = "Sin conexión: ${e.message}"
+                    }
+                    // Si _animal.value NO es nulo, significa que el repositorio ya nos dio
+                    // los datos locales a través del onSuccess antes de fallar la red.
                 }
+            _isLoading.value = false
         }
     }
 
     private fun cargarVacunas(animalId: Int) {
         viewModelScope.launch {
             repository.getVacunas(animalId)
-                .onSuccess { _vacunas.value = it }
-                .onFailure { _error.value = it.message }
+                .onSuccess {
+                    _vacunas.value = it
+                    // No tocamos _error para no sobreescribir errores del animal
+                }
+                .onFailure {
+                    // Fallo silencioso: si no hay red, simplemente no actualiza la lista
+                }
             _isLoading.value = false
         }
     }
 
-    // Dentro de DetalleAnimalViewModel.kt
-    // Corregido para image_0a8ff1.png
     fun cargarCatalogo() {
         viewModelScope.launch {
             repository.obtenerCatalogoVacunas()
-                .onSuccess { lista: List<String> -> // Especificamos tipo explícito
-                    _catalogoVacunas.value = lista
+                .onSuccess { lista: List<String> ->
+                    _catalogoVacunas.value = lista.ifEmpty { catalogoPorDefecto }
                 }
-                .onFailure { e ->
-                    _error.value = "Error al cargar catálogo: ${e.message}"
+                .onFailure {
+                    // MODO OFFLINE: Si falla la red, usamos la lista local sin disparar un estado de Error crítico
+                    if (_catalogoVacunas.value.isEmpty()) {
+                        _catalogoVacunas.value = catalogoPorDefecto
+                    }
                 }
         }
     }
 
-    // DEJA SOLO UNA VERSIÓN DE ESTA FUNCIÓN
     fun agregarAlCatalogo(nombre: String) {
         viewModelScope.launch {
             repository.guardarEnCatalogo(nombre)
@@ -75,8 +87,38 @@ class DetalleAnimalViewModel : ViewModel() {
                     cargarCatalogo()
                 }
                 .onFailure { e ->
-                    _error.value = "Error: ${e.message}"
+                    // Aquí sí es útil avisar, pero quizás con un Toast o snackbar (vía eventos)
+                    // Por ahora evitamos bloquear la pantalla principal
                 }
+        }
+    }
+
+    fun eliminarAnimal(id: Int, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repository.eliminarAnimal(id)
+                .onSuccess {
+                    _isLoading.value = false
+                    onSuccess() // Esto cerrará la pantalla y volverá al inventario
+                }
+                .onFailure {
+                    _error.value = "Error al eliminar: ${it.message}"
+                    _isLoading.value = false
+                }
+        }
+    }
+
+    fun eliminarVacuna(vacunaId: Int, animalId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repository.eliminarVacuna(vacunaId)
+                .onSuccess {
+                    cargarVacunas(animalId)
+                }
+                .onFailure { t ->
+                    _error.value = "No se pudo eliminar: ${t.message}"
+                }
+            _isLoading.value = false
         }
     }
 
@@ -87,7 +129,12 @@ class DetalleAnimalViewModel : ViewModel() {
                     cargarVacunas(vacuna.animal_id)
                     onSuccess()
                 }
-                .onFailure { _error.value = "Error al registrar: ${it.message}" }
+                .onFailure {
+                    // Si falla el registro, el repositorio ya lo guardó localmente (sincronizado = false)
+                    // Así que refrescamos y cerramos el diálogo con éxito
+                    cargarVacunas(vacuna.animal_id)
+                    onSuccess()
+                }
         }
     }
 }

@@ -20,6 +20,9 @@ import com.ganaderia.ganaderiaapp.data.model.Animal
 import com.ganaderia.ganaderiaapp.ui.components.*
 import com.ganaderia.ganaderiaapp.ui.theme.GanadoColors
 import com.ganaderia.ganaderiaapp.ui.viewmodel.InventarioViewModel
+import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
+import androidx.compose.foundation.lazy.items
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,118 +30,86 @@ fun InventarioScreen(
     onNavigateToDetalle: (Int) -> Unit,
     onNavigateToFormulario: () -> Unit,
     onNavigateBack: () -> Unit,
-    viewModel: InventarioViewModel = viewModel()
+    // CORRECCIÓN: Usamos la factory que ya creaste pasando el contexto
+    viewModel: InventarioViewModel = viewModel(
+        factory = GanadoViewModelFactory(androidx.compose.ui.platform.LocalContext.current)
+    )
 ) {
     val animales by viewModel.animales.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val busqueda by viewModel.busqueda.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "Inventario (${animales.size})",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Inventario") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = Color.White
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
                     }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.cargarAnimales() }) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Actualizar",
-                            tint = Color.White
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = GanadoColors.Primary,
-                    titleContentColor = Color.White
-                )
+                }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToFormulario,
-                containerColor = GanadoColors.Success,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar")
+            FloatingActionButton(onClick = onNavigateToFormulario) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir Animal")
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Buscador
-            OutlinedTextField(
-                value = busqueda,
-                onValueChange = { viewModel.buscar(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text("Buscar por ID...") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = GanadoColors.Primary
-                    )
-                },
-                trailingIcon = {
-                    if (busqueda.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.buscar("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GanadoColors.Primary,
-                    unfocusedBorderColor = Color.LightGray
-                )
-            )
+        Column(modifier = Modifier.padding(padding)) {
+            if (isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
-            // Lista de animales
-            when {
-                isLoading -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = GanadoColors.Primary)
-                }
-                error != null -> ErrorScreen(error!!) { viewModel.cargarAnimales() }
-                animales.isEmpty() -> EmptyState(
-                    icono = "🐄",
-                    titulo = "No hay animales registrados",
-                    mensaje = "Presiona el botón + para agregar uno"
+            if (error != null) {
+                Text(
+                    text = "Error: $error",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp)
                 )
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(animales.size) { index ->
-                        AnimalCard(
-                            animal = animales[index],
-                            onClick = { onNavigateToDetalle(animales[index].id) }
-                        )
-                    }
+            }
+
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(animales) { animal ->
+                    AnimalItem(
+                        animal = animal,
+                        onClick = { onNavigateToDetalle(animal.id) }
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AnimalItem(animal: Animal, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "ID: ${animal.identificacion}", style = MaterialTheme.typography.titleLarge)
+                Text(text = "Raza: ${animal.raza}", style = MaterialTheme.typography.bodyMedium)
+                Text(text = "Peso: ${animal.peso_actual ?: "---"} kg", style = MaterialTheme.typography.bodyMedium)
+            }
+
+            // Icono de sincronización
+            Icon(
+                imageVector = if (animal.sincronizado) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                contentDescription = null,
+                tint = if (animal.sincronizado) Color.Green else Color.Gray
+            )
+
+            Icon(Icons.Default.ChevronRight, contentDescription = null)
         }
     }
 }

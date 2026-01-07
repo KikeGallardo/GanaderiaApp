@@ -8,23 +8,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset // IMPORTANTE: Resuelve el error de unresolved
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.ganaderia.ganaderiaapp.data.model.VacunaRequest
 import com.ganaderia.ganaderiaapp.ui.viewmodel.DetalleAnimalViewModel
+import com.ganaderia.ganaderiaapp.ui.viewmodel.GanadoViewModelFactory
 import com.ganaderia.ganaderiaapp.ui.components.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.window.DialogProperties
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,8 +34,12 @@ fun DetalleAnimalScreen(
     animalId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEditar: (Int) -> Unit,
-    viewModel: DetalleAnimalViewModel = viewModel()
+    navController: NavController,
 ) {
+    val context = LocalContext.current
+    val factory = remember { GanadoViewModelFactory(context) }
+    val viewModel: DetalleAnimalViewModel = viewModel(factory = factory)
+
     val animal by viewModel.animal.collectAsState()
     val vacunas by viewModel.vacunas.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -42,6 +48,7 @@ fun DetalleAnimalScreen(
 
     var tabSeleccionada by remember { mutableIntStateOf(0) }
     var mostrarDialogoVacuna by remember { mutableStateOf(false) }
+    var mostrarConfirmarBorrado by remember { mutableStateOf(false) }
 
     LaunchedEffect(animalId) {
         viewModel.cargarAnimal(animalId)
@@ -60,7 +67,7 @@ fun DetalleAnimalScreen(
                     IconButton(onClick = { onNavigateToEditar(animalId) }) {
                         Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color(0xFF2E7D32))
                     }
-                    IconButton(onClick = { /* Lógica borrar */ }) {
+                    IconButton(onClick = { mostrarConfirmarBorrado = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color.Red)
                     }
                 },
@@ -91,7 +98,12 @@ fun DetalleAnimalScreen(
 
                         when (tabSeleccionada) {
                             0 -> PestañaGeneralCompleta(animal!!)
-                            1 -> PestañaSaludEstilizada(vacunas) { mostrarDialogoVacuna = true }
+                            1 -> PestañaSaludEstilizada(
+                                animalId = animalId,
+                                vacunas = vacunas,
+                                viewModel = viewModel,
+                                onAgregar = { mostrarDialogoVacuna = true }
+                            )
                         }
                     }
                 }
@@ -99,18 +111,41 @@ fun DetalleAnimalScreen(
         }
     }
 
-    if (mostrarDialogoVacuna) {
-        // Obtenemos la lista del catálogo del StateFlow del ViewModel
-        val catalogo by viewModel.catalogoVacunas.collectAsState()
+    // Diálogo de confirmación para borrar animal
+    if (mostrarConfirmarBorrado) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmarBorrado = false },
+            title = { Text("¿Eliminar Animal?") },
+            text = { Text("Se eliminará permanentemente a ${animal?.identificacion}. Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        animal?.id?.let { id ->
+                            viewModel.eliminarAnimal(id) {
+                                navController.popBackStack()
+                            }
+                        }
+                        mostrarConfirmarBorrado = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarConfirmarBorrado = false }) { Text("Cancelar") }
+            }
+        )
+    }
 
+    if (mostrarDialogoVacuna) {
         RegistrarVacunaDialog(
             animalId = animalId,
             opcionesCatalogo = catalogo,
             onDismiss = { mostrarDialogoVacuna = false },
             onConfirm = { request ->
-                viewModel.registrarVacuna(request) { mostrarDialogoVacuna = false }
+                viewModel.registrarVacuna(request) {
+                    mostrarDialogoVacuna = false
+                }
             },
-            // ESTA ES LA LÍNEA QUE FALTA:
             onNuevaVacunaCatalogo = { nombre ->
                 viewModel.agregarAlCatalogo(nombre)
             }
@@ -125,11 +160,22 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "ID: ${animal.identificacion}",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "ID: ${animal.identificacion}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!animal.sincronizado) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = "No sincronizado",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
 
         item {
@@ -141,7 +187,6 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
             }
         }
 
-        // Usando tus nombres de variables: padre_identificacion y madre_identificacion
         item {
             DetalleCard(titulo = "Genealogía") {
                 InfoRow(Icons.Default.Male, "Padre", animal.padre_identificacion ?: "Sin registro")
@@ -157,6 +202,35 @@ fun PestañaGeneralCompleta(animal: com.ganaderia.ganaderiaapp.data.model.Animal
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VentanaFecha(onDateSelected: (String) -> Unit, onDismiss: () -> Unit) {
+    val datePickerState = rememberDatePickerState()
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                datePickerState.selectedDateMillis?.let { millis ->
+                    // Compatible con API 24 usando java.util.Calendar
+                    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                    calendar.timeInMillis = millis
+                    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    formatter.timeZone = TimeZone.getTimeZone("UTC")
+                    onDateSelected(formatter.format(calendar.time))
+                }
+                onDismiss()
+            }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    ) {
+        DatePicker(state = datePickerState)
+    }
+}
+
+// El resto de componentes (DetalleCard, InfoRow, RegistrarVacunaDialog, PestañaSaludEstilizada)
+// se mantienen igual que en tu código original, asegurando que PestañaSaludEstilizada
+// use el viewModel.eliminarVacuna(v.id, animalId).
 
 @Composable
 fun DetalleCard(titulo: String, contenido: @Composable ColumnScope.() -> Unit) {
@@ -184,6 +258,7 @@ fun InfoRow(icon: ImageVector, label: String, value: String) {
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegistrarVacunaDialog(
@@ -193,9 +268,7 @@ fun RegistrarVacunaDialog(
     onConfirm: (VacunaRequest) -> Unit,
     onNuevaVacunaCatalogo: (String) -> Unit
 ) {
-    // Estados para todos los campos
     var tipoVacuna by remember { mutableStateOf("") }
-    var nombreComercial by remember { mutableStateOf("") }
     var fechaAplicacion by remember { mutableStateOf("2026-01-06") }
     var proximaDosis by remember { mutableStateOf("") }
     var dosis by remember { mutableStateOf("") }
@@ -203,14 +276,12 @@ fun RegistrarVacunaDialog(
     var veterinario by remember { mutableStateOf("") }
     var notas by remember { mutableStateOf("") }
 
-    // Estados de control para DatePickers y UI
     var showDatePickerApp by remember { mutableStateOf(false) }
     var showDatePickerProx by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var mostrarDialogoNuevoNombre by remember { mutableStateOf(false) }
     var nuevoNombre by remember { mutableStateOf("") }
 
-    // --- Lógica de DatePickers ---
     if (showDatePickerApp) {
         VentanaFecha(
             onDateSelected = { fechaAplicacion = it },
@@ -225,7 +296,6 @@ fun RegistrarVacunaDialog(
         )
     }
 
-    // --- Diálogo para añadir al catálogo ---
     if (mostrarDialogoNuevoNombre) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoNuevoNombre = false },
@@ -254,7 +324,6 @@ fun RegistrarVacunaDialog(
         )
     }
 
-    // --- Diálogo Principal ---
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -267,7 +336,6 @@ fun RegistrarVacunaDialog(
         },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Selector de Tipo de Vacuna
                 item {
                     Text("Tipo de Vacuna *", fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     ExposedDropdownMenuBox(
@@ -296,18 +364,7 @@ fun RegistrarVacunaDialog(
                     }
                 }
 
-                // Campos que aparecen al elegir la vacuna
                 if (tipoVacuna.isNotBlank()) {
-                    item {
-                        Text("Nombre Comercial", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        OutlinedTextField(
-                            value = nombreComercial,
-                            onValueChange = { nombreComercial = it },
-                            placeholder = { Text("Ej: Bravoxin") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Column(Modifier.weight(1f)) {
@@ -395,9 +452,9 @@ fun RegistrarVacunaDialog(
                             animal_id = animalId,
                             nombre_vacuna = tipoVacuna,
                             fecha_aplicacion = fechaAplicacion,
-                            dosis = dosis,
+                            dosis = dosis.ifBlank { null },
                             lote = lote.ifBlank { null },
-                            veterinario = veterinario,
+                            veterinario = veterinario.ifBlank { null },
                             proxima_dosis = proximaDosis.ifBlank { null },
                             observaciones = notas.ifBlank { null }
                         )
@@ -417,68 +474,18 @@ fun RegistrarVacunaDialog(
     )
 }
 
-// Función auxiliar para los diálogos de fecha
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun VentanaFecha(onDateSelected: (String) -> Unit, onDismiss: () -> Unit) {
-    val datePickerState = rememberDatePickerState()
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { millis ->
-                    val date = java.time.Instant.ofEpochMilli(millis)
-                        .atZone(java.time.ZoneId.of("UTC"))
-                        .toLocalDate()
-                    onDateSelected(date.toString())
-                }
-                onDismiss()
-            }) { Text("OK") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    ) {
-        DatePicker(state = datePickerState)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MostrarDatePicker(
-    onDateSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val datePickerState = rememberDatePickerState()
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { millis ->
-                    // Convertir milisegundos a formato YYYY-MM-DD
-                    val date = java.time.Instant.ofEpochMilli(millis)
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate()
-                    onDateSelected(date.toString())
-                }
-                onDismiss()
-            }) { Text("OK") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    ) {
-        DatePicker(state = datePickerState)
-    }
-}
-
 @Composable
 fun PestañaSaludEstilizada(
+    animalId: Int,
     vacunas: List<com.ganaderia.ganaderiaapp.data.model.Vacuna>,
+    viewModel: DetalleAnimalViewModel,
     onAgregar: () -> Unit
 ) {
+    var vacunaParaBorrar by remember { mutableStateOf<com.ganaderia.ganaderiaapp.data.model.Vacuna?>(null) }
+
     Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-        // Dentro de PestañaSaludEstilizada
         Button(
-            onClick = onAgregar, // Esto debe abrir el diálogo actualizado
+            onClick = onAgregar,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
             shape = RoundedCornerShape(26.dp)
@@ -489,6 +496,12 @@ fun PestañaSaludEstilizada(
 
         Spacer(Modifier.height(16.dp))
 
+        if (vacunas.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No hay vacunas registradas", color = Color.Gray)
+            }
+        }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(vacunas) { vacuna ->
                 Card(
@@ -498,10 +511,47 @@ fun PestañaSaludEstilizada(
                 ) {
                     ListItem(
                         headlineContent = { Text(vacuna.nombre_vacuna, fontWeight = FontWeight.Bold) },
-                        supportingContent = { Text("Fecha: ${vacuna.fecha_aplicacion.take(10)}") }
+                        supportingContent = {
+                            Column {
+                                Text("Fecha: ${vacuna.fecha_aplicacion.take(10)}")
+                                if (!vacuna.proxima_dosis.isNullOrBlank()) {
+                                    Text("Próxima: ${vacuna.proxima_dosis.take(10)}", color = Color(0xFFD32F2F))
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            IconButton(onClick = { vacunaParaBorrar = vacuna }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color(0xFFC62828))
+                            }
+                        },
+                        leadingContent = {
+                            Icon(Icons.Default.MedicalServices, contentDescription = null, tint = Color(0xFF2E7D32))
+                        }
                     )
                 }
             }
         }
+    }
+
+    if (vacunaParaBorrar != null) {
+        AlertDialog(
+            onDismissRequest = { vacunaParaBorrar = null },
+            title = { Text("¿Eliminar Vacuna?") },
+            text = { Text("Se eliminará el registro de ${vacunaParaBorrar?.nombre_vacuna}. Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vacunaParaBorrar?.let { v ->
+                            viewModel.eliminarVacuna(v.id, animalId)
+                        }
+                        vacunaParaBorrar = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vacunaParaBorrar = null }) { Text("Cancelar") }
+            }
+        )
     }
 }
